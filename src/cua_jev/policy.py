@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+import math
+import os
+import time
+from collections.abc import Callable, Sequence
+from typing import Protocol
+
+import httpx
+
+from .errors import PolicyError
+from .models import ActionCandidate, Decision, Observation
+
+
+class DecisionPolicy(Protocol):
+    def choose(self, observation: Observation, candidates: Sequence[ActionCandidate]) -> Decision: ...
+
+
+def _criteria(candidates: Sequence[ActionCandidate]) -> dict[str, str]:
+    if not 1 <= len(candidates) <= 255:
+        raise PolicyError("Jev requires between 1 and 255 candidates")
+    ids = [candidate.id for candidate in candidates]
+    if len(ids) != len(set(ids)):
+        raise PolicyError("candidate ids must be unique")
+    return {
+        candidate.id: (
+            f"{candidate.description} Channel={candidate.channel}; capability={candidate.capability}; "
+            f"risk={candidate.risk}; preconditions={list(candidate.preconditions)}."
+        )
+        for candidate in candidates
+    }
+
+
+class JevPolicy:
+    """Strict TypeSafe Jev choice adapter. Credentials never enter traces or errors."""
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        *,
+        model: str | None = None,
+        api_url: str | None = None,
+        timeout_s: float = 30,
+        retries: int = 2,
+        client: httpx.Client | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._key = api_key or os.getenv("TYPESAFE_API_KEY")
+        if not self._key:
+            raise PolicyError("TYPESAFE_API_KEY is not set")
+        self.model = model or os.getenv("CUA_JEV_MODEL", "jev-1.13.0")
+        self.api_url = api_url or os.getenv("CUA_JEV_API_URL", "https://api.typesafe.ai/v1/systemone")
+        if not self.api_url.startswith("https://"):
+            raise PolicyError("Jev credentials require HTTPS")
+        self.timeout_s = timeout_s
+        self.retries = retries
+        self._client = client or httpx.Client(timeout=timeout_s, follow_redirects=False)
+        self._owns_client = client is None
+        self._sleep = sleep
+
+    def close(self) -> None:
+        if self._owns_client:
+            self._client.close()
+
+    def choose(self, observation: Observation, candidates: Sequence[ActionCandidate]) -> Decision:
+        criteria = _criteria(candidates)
+        body = {
+            "model": self.model,
+            "state": {
+                "task": observation.task,
+                "subgoal": observation.subgoal,
+                "observation_id": observation.observation_id,
+                "source": observation.source,
+                "state": observation.state,
+                "available_actions": [candidate.to_dict() for candidate in candidates],
+            },
+            "questions": {
+                "action": {
+                    "type": "choice",
+                    "criteria": criteria,
+                    "instructions": (
+                        "Choose exactly one immediate action that best advances the current subgoal. "
+                        "Use only the supplied state. Prefer a read-only, directly verifiable action "
+                        "when alternatives are equivalent. Respect preconditions and never invent "
+                        "an unavailable action."
+                    ),
+                }
+            },
+        }
+        started = time.perf_counter()
+        result = None
+        safe_error = "Jev request failed"
+        for attempt in range(self.retries + 1):
+            try:
+                response = self._client.post(
+                    self.api_url,
+                    headers={"Authorization": f"Bearer {self._key}"},
+                    json=body,
+                )
+                if response.status_code in {429, 500, 502, 503, 504} and attempt < self.retries:
+                    self._sleep(0.25 * (2**attempt))
+                    continue
+                response.raise_for_status()
+                result = response.json()
+                break
+            except (httpx.HTTPError, ValueError) as exc:
+                safe_error = f"Jev request failed ({type(exc).__name__})"
+                if attempt < self.retries:
+                    self._sleep(0.25 * (2**attempt))
+                    continue
+        if result is None:
+            raise PolicyError(safe_error)
+        latency_ms = (time.perf_counter() - started) * 1000
+        try:
+            answer = result["answers"]["action"]
+            selected = answer["choice"]
+            probabilities = answer["probabilities"]
+            confidence = answer["confidence"]
+            if selected not in criteria or set(probabilities) != set(criteria):
+                raise ValueError
+            if not all(type(v) in (float, int) and math.isfinite(v) for v in probabilities.values()):
+                raise ValueError
+            return Decision(
+                observation_id=observation.observation_id,
+                candidate_id=selected,
+                probabilities={key: float(value) for key, value in probabilities.items()},
+                confidence=float(confidence),
+                model=str(result.get("model", self.model)),
+                latency_ms=latency_ms,
+            )
+        except (KeyError, TypeError, ValueError):
+            raise PolicyError("invalid Jev choice response; no action executed") from None
+
+
+class RulePolicy:
+    """Deterministic baseline: prefer safe channels, then stable candidate order."""
+
+    channel_order = {"mcp": 0, "api": 1, "script": 2, "cli": 3, "gui": 4, "control": 5}
+    risk_order = {"read_only": 0, "local_write": 1, "destructive": 2, "external_side_effect": 3}
+
+    def choose(self, observation: Observation, candidates: Sequence[ActionCandidate]) -> Decision:
+        _criteria(candidates)
+        started = time.perf_counter()
+        selected = min(
+            candidates,
+            key=lambda c: (self.risk_order[str(c.risk)], self.channel_order[str(c.channel)], c.id),
+        )
+        probabilities = {candidate.id: float(candidate.id == selected.id) for candidate in candidates}
+        return Decision(
+            observation_id=observation.observation_id,
+            candidate_id=selected.id,
+            probabilities=probabilities,
+            confidence=1.0,
+            model="rule-baseline",
+            latency_ms=(time.perf_counter() - started) * 1000,
+        )

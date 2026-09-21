@@ -1,0 +1,41 @@
+{
+  "name": "inspect_report",
+  "description": "Inspect the local sales summary without changing it.",
+  "subgoal": "Read the UTF-8 report content through one available, verifiable channel.",
+  "state": {
+    "platform": "windows",
+    "report_path": "${REPORT}",
+    "workspace": "${WORKSPACE}",
+    "constraints": ["read_only", "no_shell_generated_commands"]
+  },
+  "candidates": [
+    {
+      "id": "api_read",
+      "channel": "api",
+      "capability": "filesystem.read_text",
+      "description": "Read the report directly with the typed filesystem API.",
+      "arguments": {"path": "${REPORT}"},
+      "risk": "read_only",
+      "verifier": "receipt.success"
+    },
+    {
+      "id": "mcp_read",
+      "channel": "mcp",
+      "capability": "mcp.filesystem.read_text",
+      "description": "Read the report through the registered filesystem MCP tool.",
+      "arguments": {"path": "${REPORT}"},
+      "risk": "read_only",
+      "verifier": "receipt.success"
+    },
+    {
+      "id": "cli_read",
+      "channel": "cli",
+      "capability": "cli.powershell_read_text",
+      "description": "Read the report with the allowlisted PowerShell template.",
+      "arguments": {"path": "${REPORT}"},
+      "risk": "read_only",
+      "verifier": "receipt.success"
+    }
+  ]
+}
+
