@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import subprocess
@@ -46,7 +47,7 @@ def sandbox_mcp_executor() -> InProcessMcpExecutor:
 
 
 class FileOrganizationTask:
-    """Select a publishable report set, archive it, then build two verified release artifacts."""
+    """Select ten publishable reports, archive them, then build five verified release artifacts."""
 
     name = "explorer-organize-fixture"
 
@@ -72,10 +73,25 @@ class FileOrganizationTask:
             "support": self.inbox / "support-Q3.txt",
             "operations": self.inbox / "operations-Q3.txt",
             "compliance": self.inbox / "compliance-Q3.txt",
+            "marketing": self.inbox / "marketing-Q3.txt",
+            "finance": self.inbox / "finance-Q3.txt",
+            "security": self.inbox / "security-Q3.txt",
+            "reliability": self.inbox / "reliability-Q3.txt",
+            "customer-success": self.inbox / "customer-success-Q3.txt",
         }
         self.destinations = {name: self.archive / path.name for name, path in self.sources.items()}
         self.manifest = self.archive / "manifest.txt"
         self.release_note = self.archive / "release-note.txt"
+        self.checksums = self.archive / "checksums.txt"
+        self.publication_index = self.archive / "publication-index.txt"
+        self.audit_record = self.archive / "audit-record.txt"
+        self.artifacts = (
+            self.manifest,
+            self.release_note,
+            self.checksums,
+            self.publication_index,
+            self.audit_record,
+        )
 
     def reset(self) -> None:
         self.inbox.mkdir(parents=True, exist_ok=True)
@@ -86,6 +102,11 @@ class FileOrganizationTask:
             "support-Q3.txt": "quarter=Q3\ntickets_closed=87\nstatus=final\n",
             "operations-Q3.txt": "quarter=Q3\nuptime=99.95\nstatus=final\n",
             "compliance-Q3.txt": "quarter=Q3\naudits=4\nstatus=final\n",
+            "marketing-Q3.txt": "quarter=Q3\ncampaigns=6\nstatus=final\n",
+            "finance-Q3.txt": "quarter=Q3\nmargin=31.2\nstatus=final\n",
+            "security-Q3.txt": "quarter=Q3\nincidents=0\nstatus=final\n",
+            "reliability-Q3.txt": "quarter=Q3\nslo=99.9\nstatus=final\n",
+            "customer-success-Q3.txt": "quarter=Q3\nrenewals=94\nstatus=final\n",
             "draft-notes.txt": "status=draft\ndo_not_publish=true\n",
             "sales-Q2.txt": "quarter=Q2\nstatus=final\n",
             "support-Q4-draft.txt": "quarter=Q4\nstatus=draft\n",
@@ -93,7 +114,7 @@ class FileOrganizationTask:
         }
         for name, content in fixtures.items():
             (self.inbox / name).write_text(content, encoding="utf-8")
-        for path in (*self.destinations.values(), self.manifest, self.release_note):
+        for path in (*self.destinations.values(), *self.artifacts):
             if path.exists():
                 path.unlink()
         if self.demo_mode:
@@ -172,10 +193,14 @@ class FileOrganizationTask:
     def observe(self, history: Sequence[StepResult]) -> Observation:
         archived = {name: path.exists() for name, path in self.destinations.items()}
         manifest_text = self.manifest.read_text(encoding="utf-8") if self.manifest.exists() else None
+        artifacts = {
+            path.name: path.read_text(encoding="utf-8") if path.exists() else None
+            for path in self.artifacts
+        }
         return Observation(
             task=(
-                "Publish the five final Q3 operational reports, exclude drafts, prior quarters and "
-                "private material, then create a deterministic manifest and release note."
+                "Publish ten final Q3 operational reports, exclude drafts, prior quarters and private "
+                "material, then create a manifest, release note, checksums, index and audit record."
             ),
             subgoal=(
                 "Confirm completion"
@@ -193,6 +218,7 @@ class FileOrganizationTask:
                 "release_note_text": (
                     self.release_note.read_text(encoding="utf-8") if self.release_note.exists() else None
                 ),
+                "artifacts": artifacts,
             },
             source=self.name,
         )
@@ -263,111 +289,33 @@ class FileOrganizationTask:
             if self.demo_mode and not self.adaptive_mode:
                 return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)
             return tuple(pending)
-        manifest_text = (
-            "sales-Q3.txt\ninventory-Q3.txt\nsupport-Q3.txt\noperations-Q3.txt\ncompliance-Q3.txt\n"
-        )
-        if observation.state["manifest_text"] != manifest_text:
-            args = {"path": str(self.manifest), "text": manifest_text}
-            expected = {"path": str(self.manifest), "contains": "inventory-Q3.txt"}
+        for path, text in self._artifact_payloads().items():
+            if observation.state["artifacts"].get(path.name) == text:
+                continue
+            suffix = path.stem.replace("-", "_")
+            intent = f"write_{suffix}"
+            args = {"path": str(path), "text": text}
+            expected = {"path": str(path), "contains": text.splitlines()[0]}
             candidates = (
                 ActionCandidate(
-                    "gui_write_manifest",
-                    Channel.GUI,
-                    "notepad.screen_write_text",
-                    "Create the archive manifest visibly in Notepad.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_manifest",
+                    f"gui_{intent}", Channel.GUI, "notepad.screen_write_text",
+                    f"Create {path.name} visibly in Notepad.", args, Risk.LOCAL_WRITE,
+                    verifier="file.contains", expected=expected, intent=intent,
                 ),
                 ActionCandidate(
-                    "mcp_write_manifest",
-                    Channel.MCP,
-                    "mcp.filesystem.write_text",
-                    "Write the archive manifest through MCP.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_manifest",
+                    f"mcp_{intent}", Channel.MCP, "mcp.filesystem.write_text",
+                    f"Write {path.name} through MCP.", args, Risk.LOCAL_WRITE,
+                    verifier="file.contains", expected=expected, intent=intent,
                 ),
                 ActionCandidate(
-                    "api_write_manifest",
-                    Channel.API,
-                    "filesystem.write_text",
-                    "Write the archive manifest through the filesystem API.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_manifest",
+                    f"api_{intent}", Channel.API, "filesystem.write_text",
+                    f"Write {path.name} through the filesystem API.", args, Risk.LOCAL_WRITE,
+                    verifier="file.contains", expected=expected, intent=intent,
                 ),
                 ActionCandidate(
-                    "cli_write_manifest",
-                    Channel.CLI,
-                    "cli.write_text",
-                    "Write the archive manifest through an argv-only tool.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_manifest",
-                ),
-            )
-            if self.demo_mode and not self.adaptive_mode:
-                return (candidates[0],)
-            return candidates if self.adaptive_mode else candidates[1:]
-        release_text = (
-            "Q3 publication ready\nreports=5\nexcluded=drafts,prior-quarter,private\nmanifest=manifest.txt\n"
-        )
-        if observation.state["release_note_text"] != release_text:
-            args = {"path": str(self.release_note), "text": release_text}
-            expected = {"path": str(self.release_note), "contains": "reports=5"}
-            candidates = (
-                ActionCandidate(
-                    "gui_write_release_note",
-                    Channel.GUI,
-                    "notepad.screen_write_text",
-                    "Create the publication release note visibly in Notepad.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_release_note",
-                ),
-                ActionCandidate(
-                    "mcp_write_release_note",
-                    Channel.MCP,
-                    "mcp.filesystem.write_text",
-                    "Write the publication release note through MCP.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_release_note",
-                ),
-                ActionCandidate(
-                    "api_write_release_note",
-                    Channel.API,
-                    "filesystem.write_text",
-                    "Write the publication release note through the filesystem API.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_release_note",
-                ),
-                ActionCandidate(
-                    "cli_write_release_note",
-                    Channel.CLI,
-                    "cli.write_text",
-                    "Write the publication release note through an argv-only tool.",
-                    args,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected=expected,
-                    intent="write_release_note",
+                    f"cli_{intent}", Channel.CLI, "cli.write_text",
+                    f"Write {path.name} through an argv-only tool.", args, Risk.LOCAL_WRITE,
+                    verifier="file.contains", expected=expected, intent=intent,
                 ),
             )
             if self.demo_mode and not self.adaptive_mode:
@@ -441,6 +389,29 @@ class FileOrganizationTask:
 
         return execute_with_receipt(candidate, observation_id, decision_id, operation)
 
+    def _artifact_payloads(self) -> dict[Path, str]:
+        names = [path.name for path in self.sources.values()]
+        manifest = "\n".join(names) + "\n"
+        checksums = "\n".join(
+            f"{hashlib.sha256(self.sources[name].read_bytes()).hexdigest()}  {self.sources[name].name}"
+            for name in self.sources
+        ) + "\n"
+        return {
+            self.manifest: manifest,
+            self.release_note: (
+                "Q3 publication ready\nreports=10\n"
+                "excluded=drafts,prior-quarter,private\nmanifest=manifest.txt\n"
+            ),
+            self.checksums: checksums,
+            self.publication_index: (
+                "release=Q3\nreports=10\nmanifest=manifest.txt\nchecksums=checksums.txt\n"
+            ),
+            self.audit_record: (
+                "validation=passed\nselected=10\nexcluded=4\n"
+                "controls=final-quarter,classification,byte-match\n"
+            ),
+        }
+
     def evaluate(
         self,
         observation: Observation,
@@ -457,11 +428,9 @@ class FileOrganizationTask:
             and self.destinations[name].read_bytes() == self.sources[name].read_bytes()
             for name in self.sources
         )
-        valid = valid and self.manifest.read_text(encoding="utf-8") == (
-            "sales-Q3.txt\ninventory-Q3.txt\nsupport-Q3.txt\noperations-Q3.txt\ncompliance-Q3.txt\n"
-        )
-        valid = valid and self.release_note.read_text(encoding="utf-8") == (
-            "Q3 publication ready\nreports=5\nexcluded=drafts,prior-quarter,private\nmanifest=manifest.txt\n"
+        valid = valid and all(
+            path.exists() and path.read_text(encoding="utf-8") == text
+            for path, text in self._artifact_payloads().items()
         )
         valid = (
             valid

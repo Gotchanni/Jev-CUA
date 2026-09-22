@@ -2,16 +2,16 @@
 
 **A typed, verifiable Jev action router for hybrid Windows computer use.**
 
-CUA-JEV tests a narrow hypothesis: once a task and the current computer state have been converted into a
-small set of legal actions, can Jev select the next action faster and more cheaply than a general-purpose
-agent while preserving safety and task success?
+CUA-JEV is a working reference framework for bringing Jev into Windows computer use. It turns application
+state into safe, typed action candidates, lets Jev choose both the next intent and execution channel, and
+closes every step with guarded execution and independent verification.
 
 ## Project position
 
-CUA-JEV is an **open reference architecture and evaluation harness for hybrid Windows computer-use action
-routing**. It is useful when an application task can expose structured state and several safe, typed ways to
+CUA-JEV is an **open reference architecture, capability-pack SDK and evaluation harness for hybrid Windows
+computer use**. It is useful when an application task can expose structured state and several safe, typed ways to
 reach the same subgoal—for example PyAutoGUI, DOM, COM, CLI, MCP or a filesystem API—and the developer wants
-to measure whether Jev is a useful low-latency router between them.
+to build a Jev-powered CUA without first training a task-specific routing model.
 
 The reusable output is not the four example workflows by themselves. The project provides:
 
@@ -23,8 +23,10 @@ The reusable output is not the four example workflows by themselves. The project
 - four executable capability-pack examples showing how to add a new application and independent terminal
   verifier.
 
-The current release is a reference implementation, not evidence that Jev is already faster or more reliable
-for general computer use. Four frozen workflows demonstrate feasibility. A publishable efficiency claim
+The primary contribution is the runnable framework and four end-to-end examples. The secondary contribution
+is the experimental surface used to derive data-backed insights about action-space routing. This release is
+not evidence that Jev is already faster or more reliable for general computer use. Four frozen workflows
+demonstrate feasibility. A publishable efficiency claim
 requires parameterized task families, repeated held-out trials, a successful GUI-only ablation and measured
 general-agent baselines under the same terminal verifiers. Until those results exist, treat the console as an
 evidence surface and the capability interfaces as the main open-source contribution.
@@ -115,7 +117,7 @@ cua-jev-ui
 ```
 
 Open `http://127.0.0.1:8768`. The page is deliberately a project introduction rather than an execution
-launcher. It explains the training-free routing hypothesis, the architecture, the four long-horizon cases and
+launcher. It introduces the framework first, then the four long-horizon cases and
 the measured Hybrid-versus-GUI evidence. Benchmark values are read from real local run records; missing paired
 samples remain visibly unavailable rather than being estimated. Run history stays under `runs/ui/`, and the
 page never accepts or stores an API key.
@@ -154,9 +156,9 @@ It creates a small report under `demo-workspace/`, offers three equivalent read-
 API, MCP and allowlisted PowerShell—selects one, executes it and writes the complete trace to
 `runs/demo.jsonl`.
 
-`episode-demo` is a real eight-step publishing loop. It resets a mixed inbox, selects five eligible reports,
-offers filesystem API, MCP and CLI routes, writes a manifest and release note, then accepts completion only
-after independent byte-for-byte and exclusion checks. `experiment` repeats this resettable episode without
+`episode-demo` is a real sixteen-step publishing loop. It resets a mixed inbox, selects ten eligible reports,
+offers filesystem API, MCP and CLI routes, writes five release artifacts, then accepts completion only
+after independent byte-for-byte, checksum and exclusion checks. `experiment` repeats this resettable episode without
 dropping failures from the denominator.
 
 The complete suite command runs four multi-step, independently verified workflows:
@@ -164,13 +166,13 @@ The complete suite command runs four multi-step, independently verified workflow
 | Workflow | Required state transitions | Competing real routes |
 |---|---|---|
 | Edge long-horizon purchase | navigate, sign in, sort, add two products, validate cart, fill checkout, review and verify receipt (15 decisions) | PyAutoGUI in GUI Only; PyAutoGUI and live DOM in Hybrid |
-| Excel analysis delivery | compute total, average, maximum and count, mark reviewed, create two charts, verify through fresh COM (8 decisions) | PyAutoGUI in GUI Only; PyAutoGUI and live COM in Hybrid |
-| VS Code diagnosis | run four failing tests, repair one defect at a time through competing tools, rerun after every mutation, prove green (10 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
-| Explorer publishing | select five final Q3 reports among draft, prior-quarter and private distractors, archive them, write manifest and release note (8 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
+| Excel analysis delivery | compute seven KPIs, mark reviewed, create two charts, verify through fresh COM (11 decisions) | PyAutoGUI in GUI Only; PyAutoGUI and live COM in Hybrid |
+| VS Code diagnosis | run eight failing tests, repair one defect at a time through competing tools, rerun after every mutation, prove green (18 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
+| Explorer publishing | select ten final Q3 reports among draft, prior-quarter and private distractors, archive them, write five release artifacts (16 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
 
 These are not four fixed action scripts. At each state, the task builder offers every currently legal
-**intent × execution route** pair. For example, the initial Excel state can expose eighteen candidates across
-six pending subgoals and three backends; after one action, the remaining candidate set is rebuilt from the
+**intent × execution route** pair. For example, the initial Excel state can expose multiple candidates across
+ten pending subgoals and three backends; after one action, the remaining candidate set is rebuilt from the
 new workbook state. Jev therefore chooses both *what to do next* and *how to do it*.
 
 Use `--profile visible` for a recordable physical-GUI run. `--headed-edge`, `--open-vscode` and

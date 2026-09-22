@@ -20,7 +20,7 @@ def runner(tmp_path):
             executors=executors,
         )
 
-    return EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=10))
+    return EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=20))
 
 
 def test_episode_runs_closed_loop_to_independent_success(tmp_path):
@@ -28,15 +28,23 @@ def test_episode_runs_closed_loop_to_independent_success(tmp_path):
     assert result.status == EpisodeStatus.SUCCESS
     assert [step.decision.candidate_id for step in result.steps] == [
         "mcp_copy_compliance",
+        "mcp_copy_customer-success",
+        "mcp_copy_finance",
         "mcp_copy_inventory",
+        "mcp_copy_marketing",
         "mcp_copy_operations",
+        "mcp_copy_reliability",
         "mcp_copy_sales",
+        "mcp_copy_security",
         "mcp_copy_support",
         "mcp_write_manifest",
         "mcp_write_release_note",
+        "mcp_write_checksums",
+        "mcp_write_publication_index",
+        "mcp_write_audit_record",
         "done",
     ]
-    assert result.channel_counts == {"mcp": 7, "control": 1}
+    assert result.channel_counts == {"mcp": 15, "control": 1}
 
 
 def test_episode_reset_makes_repeated_runs_reproducible(tmp_path):

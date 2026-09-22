@@ -14,12 +14,14 @@ def test_vscode_terminal_task_completes_real_test_cycle(tmp_path: Path) -> None:
     result = _suite_runner("rule", tmp_path / "vscode.jsonl").run(task)
 
     assert result.status == EpisodeStatus.SUCCESS
-    assert len(result.steps) == 10
+    assert len(result.steps) == 18
     assert task._test().returncode == 0
     assert "return left + right" in task.source.read_text(encoding="utf-8")
     assert "return left * right" in task.source.read_text(encoding="utf-8")
     assert "return left - right" in task.source.read_text(encoding="utf-8")
     assert "return left / right" in task.source.read_text(encoding="utf-8")
+    assert "return max(low, min(value, high))" in task.source.read_text(encoding="utf-8")
+    assert "return (part / whole) * 100" in task.source.read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="the system Edge channel is a Windows demo dependency")
@@ -49,4 +51,4 @@ def test_excel_task_completes_real_workbook_cycle(tmp_path: Path) -> None:
         pytest.skip(f"desktop Excel is unavailable: {exc}")
 
     assert result.status == EpisodeStatus.SUCCESS
-    assert len(result.steps) == 8
+    assert len(result.steps) == 11

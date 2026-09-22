@@ -14,7 +14,7 @@ from typing import Any
 
 from ..suites import SUITE_NAMES
 
-BENCHMARK_VERSION = "long-horizon-v1"
+BENCHMARK_VERSION = "long-horizon-v2"
 
 TASK_CATALOG = {
     "edge": {
@@ -29,32 +29,32 @@ TASK_CATALOG = {
     },
     "excel": {
         "title": "Excel 分析交付",
-        "description": "计算四项指标、标记复核状态、创建两张图表，再由独立 COM 会话验证。",
+        "description": "计算七项业务指标、标记复核状态并创建双图表，再由独立 COM 会话验证。",
         "gui_routes": ["PyAutoGUI · Excel", "COM Observe", "COM Verify"],
         "hybrid_routes": ["PyAutoGUI · Excel", "Live Excel COM", "COM Verify"],
         "hybrid_channels": ["gui", "script"],
         "evaluation_routes": ["Visible Excel", "Excel COM", "Workbook API"],
-        "steps": 8,
+        "steps": 11,
         "benchmark_version": BENCHMARK_VERSION,
     },
     "vscode": {
         "title": "VS Code 测试修复",
-        "description": "诊断四个独立缺陷，选择修复顺序和通道，并在每次修改后重跑回归测试。",
+        "description": "诊断八个独立缺陷，自主选择修复顺序与通道，并在每次修改后重跑回归测试。",
         "gui_routes": ["PyAutoGUI · VS Code", "Terminal", "Test Verify"],
         "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "hybrid_channels": ["gui", "mcp", "api", "cli"],
         "evaluation_routes": ["Visible VS Code", "MCP", "Filesystem API", "Allowlisted CLI"],
-        "steps": 10,
+        "steps": 18,
         "benchmark_version": BENCHMARK_VERSION,
     },
     "explorer": {
         "title": "Explorer 发布流水线",
-        "description": "从混合收件箱筛选五份合格报告，排除敏感材料并生成发布清单与说明。",
+        "description": "从混合收件箱筛选十份合格报告，排除敏感材料并生成五项发布工件。",
         "gui_routes": ["PyAutoGUI · Explorer", "PyAutoGUI · Notepad", "File Verify"],
         "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "hybrid_channels": ["gui", "mcp", "api", "cli"],
         "evaluation_routes": ["Visible Explorer", "MCP", "Filesystem API", "Allowlisted CLI"],
-        "steps": 8,
+        "steps": 16,
         "benchmark_version": BENCHMARK_VERSION,
     },
 }

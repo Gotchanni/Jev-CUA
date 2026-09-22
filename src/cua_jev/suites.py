@@ -847,13 +847,16 @@ class ExcelSalesTask:
                 ("Dock", 2, 220),
                 ("Headset", 3, 180),
             )
-            summary.Range("A1:B6").Value = (
+            summary.Range("A1:B9").Value = (
                 ("Metric", "Value"),
                 ("Total revenue", None),
                 ("Average revenue", None),
                 ("Maximum revenue", None),
                 ("Product count", None),
                 ("Review status", None),
+                ("Minimum revenue", None),
+                ("Total units", None),
+                ("Average revenue per unit", None),
             )
             book.SaveAs(str(self.workbook), 51)
         finally:
@@ -910,6 +913,12 @@ class ExcelSalesTask:
                     product_count = summary.Range("B5").Value
                     count_formula = summary.Range("B5").Formula
                     review_status = summary.Range("B6").Value
+                    minimum = summary.Range("B7").Value
+                    minimum_formula = summary.Range("B7").Formula
+                    total_units = summary.Range("B8").Value
+                    units_formula = summary.Range("B8").Formula
+                    revenue_per_unit = summary.Range("B9").Value
+                    revenue_per_unit_formula = summary.Range("B9").Formula
                     charts = sum(
                         self._demo_book.Worksheets(i).ChartObjects().Count
                         for i in range(1, self._demo_book.Worksheets.Count + 1)
@@ -929,6 +938,12 @@ class ExcelSalesTask:
                 product_count,
                 count_formula,
                 review_status,
+                minimum,
+                minimum_formula,
+                total_units,
+                units_formula,
+                revenue_per_unit,
+                revenue_per_unit_formula,
                 charts,
             )
         pythoncom, win32 = self._excel_modules()
@@ -950,6 +965,12 @@ class ExcelSalesTask:
             product_count = summary.Range("B5").Value
             count_formula = summary.Range("B5").Formula
             review_status = summary.Range("B6").Value
+            minimum = summary.Range("B7").Value
+            minimum_formula = summary.Range("B7").Formula
+            total_units = summary.Range("B8").Value
+            units_formula = summary.Range("B8").Formula
+            revenue_per_unit = summary.Range("B9").Value
+            revenue_per_unit_formula = summary.Range("B9").Formula
             charts = sum(book.Worksheets(i).ChartObjects().Count for i in range(1, book.Worksheets.Count + 1))
         finally:
             del summary
@@ -971,6 +992,12 @@ class ExcelSalesTask:
             product_count,
             count_formula,
             review_status,
+            minimum,
+            minimum_formula,
+            total_units,
+            units_formula,
+            revenue_per_unit,
+            revenue_per_unit_formula,
             charts,
         )
 
@@ -985,11 +1012,17 @@ class ExcelSalesTask:
         product_count,
         count_formula,
         review_status,
+        minimum,
+        minimum_formula,
+        total_units,
+        units_formula,
+        revenue_per_unit,
+        revenue_per_unit_formula,
         charts,
     ) -> Observation:
         return Observation(
             task=(
-                "Build a reviewed sales summary with four independent metrics and two charts, "
+                "Build a reviewed sales summary with seven independent metrics and two charts, "
                 "then verify the saved workbook through a fresh Excel process."
             ),
             subgoal="Verify workbook"
@@ -998,6 +1031,10 @@ class ExcelSalesTask:
             and abs(float(average) - (1540 / 6)) < 0.001
             and maximum == 500
             and product_count == 6
+            and minimum == 160
+            and total_units == 19
+            and revenue_per_unit is not None
+            and abs(float(revenue_per_unit) - (1540 / 19)) < 0.001
             and charts >= 2
             and review_status == "Reviewed"
             else "Choose the next incomplete workbook operation",
@@ -1012,6 +1049,12 @@ class ExcelSalesTask:
                 "product_count": product_count,
                 "count_formula": count_formula,
                 "review_status": review_status,
+                "minimum_value": minimum,
+                "minimum_formula": minimum_formula,
+                "total_units": total_units,
+                "units_formula": units_formula,
+                "revenue_per_unit": revenue_per_unit,
+                "revenue_per_unit_formula": revenue_per_unit_formula,
                 "chart_count": charts,
             },
             source=self.name,
@@ -1081,6 +1124,19 @@ class ExcelSalesTask:
             add_cell_routes("count_products", "write_count_formula", "B5", formula="=COUNTA(Data!A2:A7)")
         if state["review_status"] != "Reviewed":
             add_cell_routes("mark_reviewed", "mark_reviewed", "B6", value="Reviewed")
+        if state.get("minimum_value") != 160:
+            add_cell_routes("find_minimum", "write_min_formula", "B7", formula="=MIN(Data!C2:C7)")
+        if state.get("total_units") != 19:
+            add_cell_routes("total_units", "write_units_formula", "B8", formula="=SUM(Data!B2:B7)")
+        if state.get("revenue_per_unit") is None or abs(
+            float(state["revenue_per_unit"]) - (1540 / 19)
+        ) >= 0.001:
+            add_cell_routes(
+                "average_revenue_per_unit",
+                "write_revenue_per_unit_formula",
+                "B9",
+                formula="=SUM(Data!C2:C7)/SUM(Data!B2:B7)",
+            )
         if state["chart_count"] < 1:
             com_args = {
                 "workbook_path": str(self.workbook),
@@ -1282,13 +1338,19 @@ class ExcelSalesTask:
             and state.state["product_count"] == 6
             and "COUNTA(" in str(state.state["count_formula"]).upper()
             and state.state["review_status"] == "Reviewed"
+            and state.state["minimum_value"] == 160
+            and "MIN(" in str(state.state["minimum_formula"]).upper()
+            and state.state["total_units"] == 19
+            and "SUM(" in str(state.state["units_formula"]).upper()
+            and abs(float(state.state["revenue_per_unit"]) - (1540 / 19)) < 0.001
+            and "/SUM(" in str(state.state["revenue_per_unit_formula"]).upper()
             and state.state["chart_count"] >= 2
         )
         return Evaluation(valid, True, "excel_workbook_verified" if valid else "excel_workbook_invalid")
 
 
 class VSCodeTerminalTask:
-    """Diagnose and repair four independent defects, rerunning tests after each mutation."""
+    """Diagnose and repair eight independent defects, rerunning tests after each mutation."""
 
     name = "vscode-terminal-repair"
     corrected_source = (
@@ -1297,7 +1359,11 @@ class VSCodeTerminalTask:
         "def subtract(left, right):\n    return left - right\n\n\n"
         "def safe_divide(left, right):\n"
         "    if right == 0:\n        raise ValueError('division by zero')\n"
-        "    return left / right\n"
+        "    return left / right\n\n\n"
+        "def maximum(left, right):\n    return left if left >= right else right\n\n\n"
+        "def minimum(left, right):\n    return left if left <= right else right\n\n\n"
+        "def clamp(value, low, high):\n    return max(low, min(value, high))\n\n\n"
+        "def percentage(part, whole):\n    return (part / whole) * 100\n"
     )
 
     def __init__(
@@ -1356,11 +1422,16 @@ class VSCodeTerminalTask:
             "def subtract(left, right):\n    return left + right\n\n\n"
             "def safe_divide(left, right):\n"
             "    if right == 0:\n        raise ValueError('division by zero')\n"
-            "    return left * right\n",
+            "    return left * right\n\n\n"
+            "def maximum(left, right):\n    return left if left <= right else right\n\n\n"
+            "def minimum(left, right):\n    return left if left >= right else right\n\n\n"
+            "def clamp(value, low, high):\n    return min(low, max(value, high))\n\n\n"
+            "def percentage(part, whole):\n    return (whole / part) * 100\n",
             encoding="utf-8",
         )
         self.test_file.write_text(
-            "import unittest\n\nfrom calc import add, multiply, safe_divide, subtract\n\n\n"
+            "import unittest\n\n"
+            "from calc import add, clamp, maximum, minimum, multiply, percentage, safe_divide, subtract\n\n\n"
             "class CalcTest(unittest.TestCase):\n"
             "    def test_add(self):\n"
             "        self.assertEqual(add(2, 3), 5)\n\n"
@@ -1372,6 +1443,15 @@ class VSCodeTerminalTask:
             "        self.assertEqual(safe_divide(9, 3), 3)\n"
             "        with self.assertRaises(ValueError):\n"
             "            safe_divide(9, 0)\n\n"
+            "    def test_maximum(self):\n"
+            "        self.assertEqual(maximum(8, 3), 8)\n\n"
+            "    def test_minimum(self):\n"
+            "        self.assertEqual(minimum(8, 3), 3)\n\n"
+            "    def test_clamp(self):\n"
+            "        self.assertEqual(clamp(12, 0, 10), 10)\n"
+            "        self.assertEqual(clamp(-2, 0, 10), 0)\n\n"
+            "    def test_percentage(self):\n"
+            "        self.assertEqual(percentage(1, 4), 25)\n\n"
             "if __name__ == '__main__':\n"
             "    unittest.main()\n",
             encoding="utf-8",
@@ -1434,7 +1514,7 @@ class VSCodeTerminalTask:
         test = self.last_test or {"returncode": None, "stdout": "", "stderr": "not run"}
         return Observation(
             task=(
-                "Diagnose four independent calculator defects, repair them through heterogeneous "
+                "Diagnose eight independent calculator defects, repair them through heterogeneous "
                 "safe tools, rerun regression tests after every mutation, and prove the suite passes."
             ),
             subgoal="Run the test suite"
@@ -1450,6 +1530,14 @@ class VSCodeTerminalTask:
                 "multiply_fixed": "def multiply(left, right):\n    return left * right" in source,
                 "subtract_fixed": "def subtract(left, right):\n    return left - right" in source,
                 "divide_fixed": "    return left / right" in source,
+                "maximum_fixed": (
+                    "def maximum(left, right):\n    return left if left >= right else right" in source
+                ),
+                "minimum_fixed": (
+                    "def minimum(left, right):\n    return left if left <= right else right" in source
+                ),
+                "clamp_fixed": "    return max(low, min(value, high))" in source,
+                "percentage_fixed": "    return (part / whole) * 100" in source,
                 "vscode_opened": self.opened,
                 "test_returncode": test["returncode"],
                 "test_stdout": test["stdout"][-2000:],
@@ -1602,6 +1690,42 @@ class VSCodeTerminalTask:
                     "    return left / right\n",
                     "    return left / right",
                     16,
+                )
+            if not observation.state.get("maximum_fixed", True):
+                add_repair_routes(
+                    "repair_maximum",
+                    "repair_maximum",
+                    "def maximum(left, right):\n    return left if left <= right else right",
+                    "def maximum(left, right):\n    return left if left >= right else right",
+                    "    return left if left >= right else right",
+                    20,
+                )
+            if not observation.state.get("minimum_fixed", True):
+                add_repair_routes(
+                    "repair_minimum",
+                    "repair_minimum",
+                    "def minimum(left, right):\n    return left if left >= right else right",
+                    "def minimum(left, right):\n    return left if left <= right else right",
+                    "    return left if left <= right else right",
+                    24,
+                )
+            if not observation.state.get("clamp_fixed", True):
+                add_repair_routes(
+                    "repair_clamp",
+                    "repair_clamp",
+                    "def clamp(value, low, high):\n    return min(low, max(value, high))",
+                    "def clamp(value, low, high):\n    return max(low, min(value, high))",
+                    "    return max(low, min(value, high))",
+                    28,
+                )
+            if not observation.state.get("percentage_fixed", True):
+                add_repair_routes(
+                    "repair_percentage",
+                    "repair_percentage",
+                    "def percentage(part, whole):\n    return (whole / part) * 100",
+                    "def percentage(part, whole):\n    return (part / whole) * 100",
+                    "    return (part / whole) * 100",
+                    32,
                 )
             if self.demo_mode and not self.adaptive_mode:
                 return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)

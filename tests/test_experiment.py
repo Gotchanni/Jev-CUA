@@ -21,11 +21,11 @@ def test_experiment_preserves_all_episode_results(tmp_path):
             executors=executors,
         )
 
-    experiment = ExperimentRunner(EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=10))).run(
+    experiment = ExperimentRunner(EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=20))).run(
         lambda: FileOrganizationTask(tmp_path), 3, output=tmp_path / "summary.json"
     )
     summary = experiment.summary()
     assert summary["episodes"] == summary["successes"] == 3
-    assert summary["channels"] == {"mcp": 21, "control": 3}
+    assert summary["channels"] == {"mcp": 45, "control": 3}
     low, high = wilson_interval(3, 3)
     assert 0 < low < high == 1

@@ -36,7 +36,7 @@ def test_excel_offers_com_and_file_api_routes(tmp_path: Path) -> None:
 
     candidates = task.candidates(observation, ())
     assert channels(candidates) == {Channel.GUI, Channel.SCRIPT, Channel.API}
-    assert len({candidate.intent for candidate in candidates}) == 6
+    assert len({candidate.intent for candidate in candidates}) == 9
 
 
 def test_vscode_offers_three_repair_routes(tmp_path: Path) -> None:
@@ -106,6 +106,9 @@ def test_visible_profile_keeps_parallel_excel_intents_but_only_gui(tmp_path: Pat
         "find_maximum",
         "count_products",
         "mark_reviewed",
+        "find_minimum",
+        "total_units",
+        "average_revenue_per_unit",
         "visualize_revenue",
     }
 

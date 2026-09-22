@@ -80,7 +80,7 @@ def _episode_runner(policy_name: str, workspace: Path, trace: Path) -> EpisodeRu
             trace=JsonlTrace(trace),
         )
 
-    return EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=10))
+    return EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=20))
 
 
 def _suite_runner(policy_name: str, trace: Path, *, policy_fallback: bool = False) -> EpisodeRunner:
