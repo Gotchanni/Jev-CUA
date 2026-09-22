@@ -77,9 +77,14 @@ def test_console_serves_brand_assets(tmp_path: Path) -> None:
         assert page.status_code == 200
         assert "CUA-JEV" in page.text
         assert "How Jev powers computer use" in page.text
-        assert "CUA observes" in page.text
+        assert "Four task-specific workflows today" in page.text
+        assert "without a VLM" in page.text
+        assert "New tasks need their own state, actions, and success checks" in page.text
+        assert "Adapter observes" in page.text
         assert "Jev chooses" in page.text
-        assert "CUA acts &amp; checks" in page.text
+        assert "Runtime acts &amp; checks" in page.text
+        assert "not general app automation" in page.text
+        assert "Four defined Windows workflows" in page.text
         assert "43 ms" not in page.text
         assert ">REAL LAB<" not in page.text
         assert "qiushi-eagle" not in page.text

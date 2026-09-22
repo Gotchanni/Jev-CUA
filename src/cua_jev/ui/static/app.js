@@ -18,22 +18,22 @@ const loopDetails = {
   observe: {
     kicker: "01 · OBSERVE",
     title: "Frame a typed decision",
-    summary: "The application adapter turns live Windows state into a compact, structured context Jev can reason over.",
+    summary: "A task-specific adapter turns structured app state into the next set of legal choices for Jev.",
     jev: "Receives the current subgoal, structured state, and only the legal actions available now.",
-    runtime: "Reads DOM, UI Automation, COM, terminal, filesystem, or MCP state through the capability pack."
+    runtime: "Reads DOM, UI Automation, COM, terminal, or filesystem state through the task adapter."
   },
   select: {
     kicker: "02 · SELECT",
     title: "Choose intent and action space",
     summary: "Jev compares typed candidates across GUI and structured channels, then commits to one executable action.",
     jev: "Selects the next intent × channel pair from the constrained candidate set; it can reselect after new evidence.",
-    runtime: "Builds and validates the candidate schema, then parses Jev’s response into the shared action contract."
+    runtime: "The task adapter offers typed candidates; the runtime validates Jev’s response."
   },
   execute: {
     kicker: "03 · EXECUTE",
     title: "Guard and execute the choice",
     summary: "The runtime checks scope and arguments before dispatching the selected action to the real Windows tool.",
-    jev: "Provides the selected action and typed arguments; it does not directly control the operating system.",
+    jev: "Selects an offered action with prebuilt arguments; it does not directly control the operating system.",
     runtime: "Applies safety guards, invokes PyAutoGUI, DOM, COM, CLI, MCP, script, or API, and records the receipt."
   },
   verify: {

@@ -27,32 +27,32 @@
       <div class="hero-copy">
         <p class="eyebrow">OPEN REFERENCE FRAMEWORK · WINDOWS FIRST</p>
         <h1>Jev for<br><em>computer use.</em></h1>
-        <p class="hero-lead">A practical framework that lets Jev choose the right action space—GUI, DOM, COM, CLI, MCP, script, or API—at every step of a verified CUA workflow.</p>
+        <p class="hero-lead">An extensible framework for Jev-guided Windows computer use. Four verified workflows show Jev choosing between GUI and structured tools.</p>
         <div class="hero-actions">
           <a class="button primary" href="#cases">Watch the cases</a>
           <a class="button secondary" href="#framework">See the framework</a>
         </div>
-        <p class="hero-note">No task-specific router training. Typed candidates in, one executable action out.</p>
+        <p class="hero-note">Four task-specific workflows today, using structured state without a VLM. New tasks need their own state, actions, and success checks.</p>
       </div>
 
       <div class="decision-card" aria-label="How CUA and Jev work together">
         <header>
           <span>CUA × JEV</span>
           <h2>How Jev powers computer use</h2>
-          <p>CUA handles the computer. Jev decides how to act.</p>
+          <p>For a supported task, Jev chooses from actions supplied by its adapter.</p>
         </header>
         <ol class="decision-flow">
           <li>
             <span class="flow-index">01</span>
-            <div><h3>CUA observes</h3><p>Read the task and current app state. Offer actions that can be taken now.</p></div>
+            <div><h3>Adapter observes</h3><p>Read structured app state and offer the actions available now.</p></div>
           </li>
           <li>
             <span class="flow-index">02</span>
-            <div><h3>Jev chooses</h3><p>Pick one action across GUI, CLI, MCP, scripts, and app APIs.</p></div>
+            <div><h3>Jev chooses</h3><p>Select one offered GUI or tool route for the next step.</p></div>
           </li>
           <li>
             <span class="flow-index">03</span>
-            <div><h3>CUA acts &amp; checks</h3><p>Guard the choice, run the tool, and verify the new state.</p></div>
+            <div><h3>Runtime acts &amp; checks</h3><p>Guard the choice, run the tool, and verify the new state.</p></div>
           </li>
         </ol>
         <footer>Repeat with the new state until the task is done.</footer>
@@ -70,7 +70,7 @@
       <header class="section-head">
         <p class="eyebrow">THE FRAMEWORK</p>
         <h2>A reusable Jev implementation for CUA.</h2>
-        <p>Applications expose structured state, legal typed actions, and a terminal verifier. Jev selects the intent and execution channel; the runtime guards, executes, and verifies it.</p>
+        <p>Each supported task defines its structured state, legal actions, and success checks. Jev selects the next action; the runtime guards, executes, and verifies it.</p>
       </header>
 
       <div class="loop-shell">
@@ -81,10 +81,10 @@
           <button role="tab" aria-selected="false" aria-controls="loop-detail" data-loop-step="verify"><span>04</span><strong>Verify</strong><small>Return evidence</small></button>
         </div>
         <article class="loop-detail" id="loop-detail" role="tabpanel" tabindex="0">
-          <div><span id="loop-kicker">01 · OBSERVE</span><h3 id="loop-title">Frame a typed decision</h3><p id="loop-summary">The application adapter turns live Windows state into a compact, structured context Jev can reason over.</p></div>
+          <div><span id="loop-kicker">01 · OBSERVE</span><h3 id="loop-title">Frame a typed decision</h3><p id="loop-summary">A task-specific adapter turns structured app state into the next set of legal choices for Jev.</p></div>
           <dl>
             <div><dt>Jev’s role</dt><dd id="loop-jev">Receives the current subgoal, structured state, and only the legal actions available now.</dd></div>
-            <div><dt>Runtime’s role</dt><dd id="loop-runtime">Reads DOM, UI Automation, COM, terminal, filesystem, or MCP state through the capability pack.</dd></div>
+            <div><dt>Runtime’s role</dt><dd id="loop-runtime">Reads DOM, UI Automation, COM, terminal, or filesystem state through the task adapter.</dd></div>
           </dl>
         </article>
       </div>
@@ -92,7 +92,7 @@
       <div class="contribution-grid">
         <article>
           <span class="contribution-number">01</span>
-          <div><h3>CUA implementation framework</h3><p>Add a capability pack instead of rebuilding an agent: observation, typed candidates, executors, guards, traces, and task-level verification share one runtime contract.</p></div>
+          <div><h3>CUA implementation framework</h3><p>Build a task adapter with observation, candidate actions, execution, and verification under one runtime contract. The four examples are not general app automation.</p></div>
         </article>
         <article>
           <span class="contribution-number">02</span>
@@ -103,7 +103,7 @@
 
     <section class="section cases-section" id="cases">
       <header class="section-head split-head">
-        <div><p class="eyebrow">VERIFIED CASES</p><h2>Four common Windows workflows.</h2></div>
+        <div><p class="eyebrow">VERIFIED CASES</p><h2>Four defined Windows workflows.</h2></div>
         <p>Paired Hybrid and GUI Only runs start from the same task and use the same terminal verifier.</p>
       </header>
       <div id="case-grid" class="case-grid" aria-live="polite"></div>
