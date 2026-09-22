@@ -1,91 +1,130 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="CUA-JEV 是一个让 Jev 在 GUI、DOM、COM、CLI、MCP 与 API 之间选择动作的开源 Windows Computer-Use 框架。">
+  <meta name="description" content="CUA-JEV is an open reference framework for using Jev to select and execute hybrid actions across Windows computer-use workflows.">
   <title>CUA-JEV · Jev for Computer Use</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">跳到正文</a>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
-    <a class="brand" href="#top" aria-label="CUA-JEV 首页"><img src="/static/logo-mark.svg" width="34" height="34" alt="ZJU-REAL 标志"><span><strong>CUA-JEV</strong><small>ZJU REAL LAB</small></span></a>
-    <nav aria-label="主要导航"><a href="#framework">框架</a><a href="#cases">案例</a><a href="#evidence">数据</a></nav>
+    <a class="brand" href="#top" aria-label="CUA-JEV home">
+      <img src="/static/logo-mark.svg" width="38" height="38" alt="REAL Lab logo">
+      <span><strong>CUA-JEV</strong><small>REAL LAB</small></span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#framework">Framework</a>
+      <a href="#cases">Cases</a>
+      <a href="#results">Results</a>
+    </nav>
     <a class="github-link" href="https://github.com/Gotchanni/Jev-CUA" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
   </header>
 
   <main id="main">
     <section class="hero" id="top">
       <div class="hero-copy">
-        <p class="eyebrow">OPEN WINDOWS CUA FRAMEWORK</p>
-        <h1>让 Jev 驱动<br><em>Computer Use.</em></h1>
-        <p class="hero-lead">一个可运行、可扩展、可验证的混合动作框架。Jev 在 GUI、DOM、COM、CLI、MCP 与 API 中逐步选路。</p>
-        <div class="hero-actions"><a class="button primary" href="#cases">看四个案例</a><a class="button secondary" href="#framework">了解框架</a></div>
+        <p class="eyebrow">OPEN REFERENCE FRAMEWORK · WINDOWS FIRST</p>
+        <h1>Jev for<br><em>computer use.</em></h1>
+        <p class="hero-lead">A practical framework that lets Jev choose the right action space—GUI, DOM, COM, CLI, MCP, script, or API—at every step of a verified CUA workflow.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#cases">Watch the cases</a>
+          <a class="button secondary" href="#framework">See the framework</a>
+        </div>
+        <p class="hero-note">No task-specific router training. Typed candidates in, one executable action out.</p>
       </div>
 
-      <div class="hero-machine" aria-label="CUA-JEV 混合动作路由示意">
-        <div class="machine-top"><span></span><span></span><span></span><b>cua-jev / episode</b><small>VERIFIED</small></div>
-        <div class="machine-body">
-          <div class="machine-context"><small>SUBGOAL 08 / 18</small><strong>Repair clamp and rerun regression</strong></div>
-          <div class="candidate-list">
-            <div><i class="route mcp">MCP</i><span>filesystem.write_text</span><b>0.61</b></div>
-            <div><i class="route cli">CLI</i><span>replace-exact</span><b>0.24</b></div>
-            <div><i class="route gui">GUI</i><span>VS Code edit</span><b>0.10</b></div>
-            <div><i class="route api">API</i><span>typed file write</span><b>0.05</b></div>
-          </div>
-          <div class="selected-route"><span class="pulse"></span><div><small>JEV SELECTED</small><b>MCP · 43 ms</b></div><span>Guard ✓ &nbsp; Verify ✓</span></div>
+      <div class="decision-card" aria-label="Jev hybrid action selection example">
+        <header><div><span>Jev decision</span><strong>Repair the failing test</strong></div><b>43 ms</b></header>
+        <div class="decision-list">
+          <div class="selected"><i>MCP</i><span>filesystem.write_text</span><b>61%</b></div>
+          <div><i>CLI</i><span>replace-exact</span><b>24%</b></div>
+          <div><i>GUI</i><span>VS Code edit</span><b>10%</b></div>
+          <div><i>API</i><span>typed file write</span><b>5%</b></div>
         </div>
+        <footer><span>Selected: MCP</span><span>Guard passed</span><span>Verified</span></footer>
       </div>
     </section>
 
-    <section class="proof-strip" aria-label="项目概览">
-      <div><strong>4</strong><span>可运行案例</span></div><div><strong id="avg-steps">15</strong><span>平均决策步数</span></div><div><strong>6</strong><span>动作通道</span></div><div><strong>0</strong><span>路由训练</span></div>
+    <section class="proof-strip" aria-label="Project highlights">
+      <div><strong>4</strong><span>verified workflows</span></div>
+      <div><strong>6</strong><span>action channels</span></div>
+      <div><strong>0</strong><span>router training runs</span></div>
+      <div><strong id="best-speedup">—</strong><span>best paired speedup</span></div>
     </section>
 
     <section class="section framework-section" id="framework">
-      <header class="section-head"><p class="eyebrow">01 · THE FRAMEWORK</p><h2>不是四段脚本，<br>是一套 CUA 运行时。</h2><p>应用只需提供状态、合法候选与终态验证；策略和执行通道可以自由替换。</p></header>
-      <div class="framework-board">
-        <div class="loop-flow" aria-label="CUA-JEV 闭环">
-          <article><span>01</span><small>OBSERVE</small><b>读取结构化状态</b></article><i aria-hidden="true">→</i>
-          <article><span>02</span><small>ROUTE</small><b>Jev 选择 intent × channel</b></article><i aria-hidden="true">→</i>
-          <article><span>03</span><small>EXECUTE</small><b>Guard 后调用真实工具</b></article><i aria-hidden="true">→</i>
-          <article><span>04</span><small>VERIFY</small><b>独立检查状态变化</b></article>
-        </div>
-        <div class="framework-points">
-          <article><span>CAPABILITY PACKS</span><b>接入新应用</b><p>封装观察、动作与验证，不重写 Agent。</p></article>
-          <article><span>HYBRID ACTION SPACE</span><b>同一目标，多条路线</b><p>前台 GUI 与后台工具共享一个决策面。</p></article>
-          <article><span>TRACE + EVAL</span><b>结果可以复查</b><p>概率、回执、耗时与终态证据完整保留。</p></article>
-        </div>
-      </div>
-    </section>
+      <header class="section-head">
+        <p class="eyebrow">THE FRAMEWORK</p>
+        <h2>A reusable Jev implementation for CUA.</h2>
+        <p>Applications expose structured state, legal typed actions, and a terminal verifier. Jev selects the intent and execution channel; the runtime guards, executes, and verifies it.</p>
+      </header>
 
-    <section class="section cases-section" id="cases">
-      <header class="section-head compact-head"><div><p class="eyebrow">02 · RUNNING CASES</p><h2>四个真实 Windows 工作流。</h2></div><p>15–18 步长程任务覆盖浏览器、办公、开发与文件发布。</p></header>
-      <div id="case-grid" class="case-grid" aria-live="polite"></div>
-    </section>
-
-    <section class="section evidence-section" id="evidence">
-      <header class="section-head compact-head"><div><p class="eyebrow">03 · EVIDENCE</p><h2>先跑通，再从数据里找答案。</h2></div><p>同一初态、同一终态验证器，对比 Hybrid Action Space 与 GUI Only。</p></header>
-      <div class="insight-row">
-        <article><span>INSIGHT 01</span><b>路由优势随任务长度累积</b><p>后台通道减少逐屏导航与等待。</p></article>
-        <article><span>INSIGHT 02</span><b>无需训练任务专用路由器</b><p>Jev 直接选择受约束的类型化动作。</p></article>
-        <article><span>INSIGHT 03</span><b>可验证比“看起来成功”重要</b><p>每个案例共用独立终态条件。</p></article>
+      <div class="loop-flow" aria-label="CUA-JEV execution loop">
+        <article><span>01</span><h3>Observe</h3><p>Read structured application state.</p></article>
+        <i aria-hidden="true">→</i>
+        <article class="route-step"><span>02</span><h3>Route with Jev</h3><p>Select intent × action channel.</p></article>
+        <i aria-hidden="true">→</i>
+        <article><span>03</span><h3>Execute</h3><p>Guard and invoke the real tool.</p></article>
+        <i aria-hidden="true">→</i>
+        <article><span>04</span><h3>Verify</h3><p>Check the resulting state independently.</p></article>
       </div>
-      <div class="benchmark-shell">
-        <div id="task-tabs" class="task-tabs" role="tablist" aria-label="选择实验任务"></div>
-        <article class="benchmark-board">
-          <div class="benchmark-title"><div><small>MEASURED RUNS</small><h3 id="benchmark-name">读取中</h3></div><div id="speedup-callout" class="speedup"><strong>—</strong><span>paired speedup</span></div></div>
-          <p id="benchmark-description" class="benchmark-description"></p>
-          <div class="benchmark-legend"><span><i class="hybrid-dot"></i>Hybrid</span><span><i class="gui-dot"></i>GUI Only</span><em>END-TO-END · LOWER IS BETTER</em></div>
-          <div id="benchmark-rows" class="benchmark-rows" aria-live="polite"></div><div id="benchmark-foot" class="benchmark-foot"></div>
+
+      <div class="contribution-grid">
+        <article>
+          <span class="contribution-number">01</span>
+          <div><h3>CUA implementation framework</h3><p>Add a capability pack instead of rebuilding an agent: observation, typed candidates, executors, guards, traces, and task-level verification share one runtime contract.</p></div>
+        </article>
+        <article>
+          <span class="contribution-number">02</span>
+          <div><h3>Fast hybrid action selection</h3><p>Jev chooses between visible GUI work and faster structured tools directly. Tool-rich workflows avoid long chains of clicks without SFT, RL, or router distillation.</p></div>
         </article>
       </div>
     </section>
 
-    <section class="closing"><img src="/static/qiushi-eagle.svg" width="58" height="58" alt="浙江大学求是鹰标志"><div><p class="eyebrow">OPEN REFERENCE IMPLEMENTATION</p><h2>把 Jev 接进你的下一项 Computer-Use 能力。</h2></div><a class="button light" href="https://github.com/Gotchanni/Jev-CUA" target="_blank" rel="noreferrer">查看代码 ↗</a></section>
+    <section class="section cases-section" id="cases">
+      <header class="section-head split-head">
+        <div><p class="eyebrow">VERIFIED CASES</p><h2>Four long-horizon Windows workflows.</h2></div>
+        <p>Paired Jev · Hybrid and Jev · GUI Only runs start from the same task and use the same terminal verifier.</p>
+      </header>
+      <div id="case-grid" class="case-grid" aria-live="polite"></div>
+    </section>
+
+    <section class="section results-section" id="results">
+      <header class="section-head split-head">
+        <div><p class="eyebrow">MEASURED RESULTS</p><h2>Hybrid avoids the GUI bottleneck.</h2></div>
+        <p>Jev keeps GUI available when it is necessary, then switches to MCP, CLI, COM, DOM, scripts, or APIs when they are faster and verifiable.</p>
+      </header>
+
+      <div class="insight-row">
+        <article><strong>One decision surface</strong><p>GUI and structured tools compete as typed candidates under the same policy.</p></article>
+        <article><strong>No routing model to train</strong><p>Jev makes constrained selections directly from the current state and legal actions.</p></article>
+        <article><strong>End-to-end evidence</strong><p>Wall time, action mix, receipts, and terminal verification come from real runs.</p></article>
+      </div>
+
+      <div class="benchmark-shell">
+        <div id="task-tabs" class="task-tabs" role="tablist" aria-label="Select a benchmark task"></div>
+        <article class="benchmark-board">
+          <div class="benchmark-title">
+            <div><span>Paired benchmark</span><h3 id="benchmark-name">Loading</h3></div>
+            <div id="speedup-callout" class="speedup"><strong>—</strong><span>faster with Hybrid</span></div>
+          </div>
+          <p id="benchmark-description" class="benchmark-description"></p>
+          <div id="benchmark-rows" class="benchmark-rows" aria-live="polite"></div>
+          <div id="benchmark-foot" class="benchmark-foot"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="closing">
+      <img src="/static/logo-mark.svg" width="60" height="60" alt="REAL Lab logo">
+      <div><p class="eyebrow">OPEN SOURCE · APACHE 2.0</p><h2>Build the next Jev-powered CUA capability.</h2></div>
+      <a class="button primary" href="https://github.com/Gotchanni/Jev-CUA" target="_blank" rel="noreferrer">Explore the code ↗</a>
+    </section>
   </main>
-  <footer><span>CUA-JEV · ZJU REAL Lab</span><span>Apache-2.0 · Windows-first</span></footer>
+
+  <footer><span>CUA-JEV · REAL Lab</span><span>Jev for hybrid computer use</span></footer>
   <script src="/static/app.js" defer></script>
 </body>
 </html>

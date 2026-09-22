@@ -18,8 +18,11 @@ BENCHMARK_VERSION = "long-horizon-v2"
 
 TASK_CATALOG = {
     "edge": {
-        "title": "Edge 长程采购",
-        "description": "登录公开商店、排序、构建双商品购物车、填写结算信息并验证订单回执。",
+        "title": "Edge checkout workflow",
+        "description": (
+            "Sign in to a public store, sort products, build a two-item cart, complete checkout, "
+            "and verify the receipt."
+        ),
         "gui_routes": ["PyAutoGUI · Edge", "DOM Observe", "DOM Verify"],
         "hybrid_routes": ["PyAutoGUI · Edge", "Playwright DOM", "DOM Verify"],
         "hybrid_channels": ["gui", "script"],
@@ -28,8 +31,11 @@ TASK_CATALOG = {
         "benchmark_version": BENCHMARK_VERSION,
     },
     "excel": {
-        "title": "Excel 分析交付",
-        "description": "计算七项业务指标、标记复核状态并创建双图表，再由独立 COM 会话验证。",
+        "title": "Excel analysis delivery",
+        "description": (
+            "Compute seven business metrics, mark review status, build two charts, and verify the "
+            "workbook in an independent COM session."
+        ),
         "gui_routes": ["PyAutoGUI · Excel", "COM Observe", "COM Verify"],
         "hybrid_routes": ["PyAutoGUI · Excel", "Live Excel COM", "COM Verify"],
         "hybrid_channels": ["gui", "script"],
@@ -38,8 +44,11 @@ TASK_CATALOG = {
         "benchmark_version": BENCHMARK_VERSION,
     },
     "vscode": {
-        "title": "VS Code 测试修复",
-        "description": "诊断八个独立缺陷，自主选择修复顺序与通道，并在每次修改后重跑回归测试。",
+        "title": "VS Code defect repair",
+        "description": (
+            "Diagnose eight independent defects, choose the repair order and action channel, and "
+            "rerun regression tests after each change."
+        ),
         "gui_routes": ["PyAutoGUI · VS Code", "Terminal", "Test Verify"],
         "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "hybrid_channels": ["gui", "mcp", "api", "cli"],
@@ -48,8 +57,11 @@ TASK_CATALOG = {
         "benchmark_version": BENCHMARK_VERSION,
     },
     "explorer": {
-        "title": "Explorer 发布流水线",
-        "description": "从混合收件箱筛选十份合格报告，排除敏感材料并生成五项发布工件。",
+        "title": "Explorer release pipeline",
+        "description": (
+            "Select ten eligible reports from a mixed inbox, exclude sensitive material, and produce "
+            "five verified release artifacts."
+        ),
         "gui_routes": ["PyAutoGUI · Explorer", "PyAutoGUI · Notepad", "File Verify"],
         "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "hybrid_channels": ["gui", "mcp", "api", "cli"],
@@ -81,13 +93,13 @@ class RunManager:
         with self._lock:
             self._refresh_active()
             if self._active_id:
-                raise ValueError("已有实验正在运行，请等待完成或先停止")
+                raise ValueError("An experiment is already running. Wait for it to finish or stop it first.")
             task = str(spec.get("task", ""))
             policy = str(spec.get("policy", ""))
             if task not in (*SUITE_NAMES, "all") or policy not in {"rule", "jev"}:
-                raise ValueError("无效的任务或策略")
+                raise ValueError("Invalid task or policy")
             if policy == "jev" and not os.getenv("TYPESAFE_API_KEY"):
-                raise ValueError("启动 Jev 实验前，请先在服务进程中设置 TYPESAFE_API_KEY")
+                raise ValueError("Set TYPESAFE_API_KEY in the server process before starting a Jev run")
 
             run_id = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
             run_dir = self.data / run_id
@@ -117,7 +129,7 @@ class RunManager:
             visible_desktop = bool(spec.get("visible_desktop"))
             execution_profile = str(spec.get("execution_profile", "hybrid"))
             if execution_profile not in {"hybrid", "visible", "adaptive"}:
-                raise ValueError("无效的执行配置")
+                raise ValueError("Invalid execution profile")
             argv.extend(("--profile", execution_profile))
             if (
                 policy == "jev"
@@ -163,7 +175,7 @@ class RunManager:
         with self._lock:
             self._refresh_active()
             if run_id != self._active_id or self._process is None:
-                raise ValueError("该实验当前没有运行中的进程")
+                raise ValueError("This experiment has no active process")
             self._process.terminate()
             try:
                 self._process.wait(timeout=10)
@@ -206,27 +218,27 @@ class RunManager:
         agent = str(spec.get("agent", ""))
         action_space = str(spec.get("action_space", ""))
         if task not in SUITE_NAMES:
-            raise ValueError("无效的 baseline 任务")
+            raise ValueError("Invalid baseline task")
         if agent != "codex_computer_use":
-            raise ValueError("目前只接受 codex_computer_use baseline")
+            raise ValueError("Only the codex_computer_use baseline is currently accepted")
         if action_space not in {"hybrid", "gui_only"}:
-            raise ValueError("action_space 必须是 hybrid 或 gui_only")
+            raise ValueError("action_space must be hybrid or gui_only")
         try:
             duration_ms = float(spec["duration_ms"])
             actions = int(spec["actions"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError("baseline 需要有效的 duration_ms 和 actions") from exc
+            raise ValueError("The baseline requires valid duration_ms and actions values") from exc
         if duration_ms <= 0 or actions < 0:
-            raise ValueError("baseline 指标必须为非负值，duration_ms 必须大于零")
+            raise ValueError("Baseline metrics must be non-negative and duration_ms must be positive")
         success = spec.get("success")
         if not isinstance(success, bool):
-            raise ValueError("baseline success 必须是布尔值")
+            raise ValueError("Baseline success must be a boolean")
         channels = spec.get("channels", {"gui": actions})
         if not isinstance(channels, dict) or any(
             not isinstance(key, str) or not isinstance(value, int) or value < 0
             for key, value in channels.items()
         ):
-            raise ValueError("baseline channels 必须是非负整数映射")
+            raise ValueError("Baseline channels must map to non-negative integers")
         run_id = f"external-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
         record = {
             "id": run_id,
@@ -257,7 +269,7 @@ class RunManager:
 
     def benchmarks(self, task: str | None = None) -> dict[str, Any]:
         if task is not None and task not in SUITE_NAMES:
-            raise ValueError("无效的 benchmark 任务")
+            raise ValueError("Invalid benchmark task")
         groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
         for record in self.list():
             if task and record["task"] != task:
@@ -397,9 +409,9 @@ class RunManager:
         try:
             parsed = float(value)
         except (TypeError, ValueError) as exc:
-            raise ValueError("可选时间指标必须是数值") from exc
+            raise ValueError("Optional timing metrics must be numeric") from exc
         if parsed < 0:
-            raise ValueError("可选时间指标不能为负数")
+            raise ValueError("Optional timing metrics cannot be negative")
         return parsed
 
     def _refresh_active(self) -> None:

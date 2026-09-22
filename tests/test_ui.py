@@ -75,8 +75,10 @@ def test_console_serves_brand_assets(tmp_path: Path) -> None:
     with TestClient(create_app(root=tmp_path, data=tmp_path / "runs")) as client:
         page = client.get("/")
         assert page.status_code == 200
-        assert "ZJU REAL Lab" in page.text
+        assert "REAL LAB" in page.text
+        assert "qiushi-eagle" not in page.text
         assert client.get("/static/logo-mark.svg").status_code == 200
+        assert client.get("/static/qiushi-eagle.svg").status_code == 404
         assert client.get("/api/bootstrap").json()["demos"]["edge"] == {
             "hybrid": "/demos/edge-hybrid.mp4"
         }
