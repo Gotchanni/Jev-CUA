@@ -90,6 +90,14 @@ class EdgeProductTask:
             self._page.evaluate("document.title = 'CUA-JEV Live Edge Session'")
             self._page.bring_to_front()
             time.sleep(1)
+            window = self.screen.focus(r".*CUA-JEV Live Edge Session.*", maximize=False)
+            try:
+                window.restore()
+                window.move_window(80, 60, 1280, 900, repaint=True)
+                window.maximize()
+            except Exception:
+                pass
+            time.sleep(self.screen.pause_s)
         else:
             fixture = Path(__file__).with_name("fixtures") / "product_filter.html"
             self._page.goto(fixture.as_uri(), wait_until="domcontentloaded")

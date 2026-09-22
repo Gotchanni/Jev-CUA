@@ -27,14 +27,10 @@ def _dependencies():
 
 
 def _font(image_font, size: int, *, mono: bool = False):
-    candidates = (
-        [Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "consola.ttf"]
-        if mono
-        else [Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "segoeui.ttf"]
-    )
-    for path in candidates:
-        if path.is_file():
-            return image_font.truetype(str(path), size)
+    font_name = "consola.ttf" if mono else "segoeui.ttf"
+    font_path = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / font_name
+    if font_path.is_file():
+        return image_font.truetype(str(font_path), size)
     return image_font.load_default()
 
 
@@ -42,35 +38,36 @@ def _draw_hud(frame, state: dict[str, Any], image, image_draw, image_font):
     overlay = image.new("RGBA", frame.size, (0, 0, 0, 0))
     draw = image_draw.Draw(overlay)
     width, height = frame.size
-    panel_width = min(620, width - 48)
-    x0, y0, x1, y1 = 24, height - 150, 24 + panel_width, height - 24
-    draw.rounded_rectangle((x0, y0, x1, y1), radius=16, fill=(24, 24, 23, 232))
-    draw.rounded_rectangle((x0 + 18, y0 + 18, x0 + 25, y0 + 25), radius=4, fill=(93, 166, 113, 255))
-    label_font = _font(image_font, 15, mono=True)
-    body_font = _font(image_font, 22)
-    meta_font = _font(image_font, 14, mono=True)
-    accent = (213, 125, 94, 255)
-    muted = (180, 180, 172, 255)
-    draw.text((x0 + 38, y0 + 13), "CUA-JEV", font=label_font, fill=accent)
+    panel_width = min(590, width - 48)
+    x0, y0, x1, y1 = 24, height - 102, 24 + panel_width, height - 24
+    draw.rounded_rectangle((x0, y0, x1, y1), radius=14, fill=(24, 24, 23, 225))
+
+    label_font = _font(image_font, 14, mono=True)
+    body_font = _font(image_font, 19)
+    meta_font = _font(image_font, 13, mono=True)
+    accent = (220, 126, 88, 255)
+    muted = (184, 188, 181, 255)
+    draw.ellipse((x0 + 16, y0 + 16, x0 + 24, y0 + 24), fill=(93, 166, 113, 255))
+    draw.text((x0 + 34, y0 + 12), "CUA-JEV", font=label_font, fill=accent)
+
     profile = str(state.get("profile_label", "PREPARING"))
-    draw.text((x0 + 124, y0 + 13), profile, font=label_font, fill=muted)
+    draw.text((x0 + 118, y0 + 12), profile, font=label_font, fill=muted)
     task = str(state.get("task", "")).upper()
     step = int(state.get("step", 0))
     total = int(state.get("total", 0))
-    candidate = str(state.get("candidate", "Waiting for first decision"))
-    draw.text((x0 + 18, y0 + 48), f"{task}  ·  STEP {step:02d} / {total:02d}", font=body_font, fill="white")
-    draw.text((x0 + 18, y0 + 85), candidate[:54], font=meta_font, fill=muted)
+    draw.text((x0 + 16, y0 + 43), f"{task}  ·  STEP {step:02d} / {total:02d}", font=body_font, fill="white")
+
     channel = str(state.get("channel", "—")).upper()
     status = str(state.get("status", "starting")).upper()
-    badge = f"{channel}  ·  {status}"
+    badge = f"{channel} · {status}"
     badge_box = draw.textbbox((0, 0), badge, font=meta_font)
     badge_width = badge_box[2] - badge_box[0] + 24
     draw.rounded_rectangle(
-        (x1 - badge_width - 18, y0 + 12, x1 - 18, y0 + 39),
+        (x1 - badge_width - 14, y0 + 40, x1 - 14, y0 + 68),
         radius=7,
         fill=(67, 67, 63, 255),
     )
-    draw.text((x1 - badge_width - 6, y0 + 17), badge, font=meta_font, fill="white")
+    draw.text((x1 - badge_width - 2, y0 + 46), badge, font=meta_font, fill="white")
     return image.alpha_composite(frame.convert("RGBA"), overlay).convert("RGB")
 
 
@@ -140,8 +137,6 @@ def _update_state(state: dict[str, Any], detail: dict[str, Any]) -> None:
     receipts = [event["payload"] for event in events if event.get("kind") == "receipt"]
     state["step"] = int(detail.get("event_counts", {}).get("decision", len(decisions)))
     state["status"] = detail.get("status", "running")
-    if decisions:
-        state["candidate"] = decisions[-1].get("candidate_id", "decision")
     if receipts:
         state["channel"] = receipts[-1].get("channel", "—")
 
@@ -165,7 +160,6 @@ def run_one(
         "profile_label": f"{policy.upper()} · {PROFILE_LABELS[profile]}",
         "total": TASK_CATALOG[task]["steps"],
         "step": 0,
-        "candidate": "Preparing clean task state",
         "channel": "—",
         "status": "starting",
     }
