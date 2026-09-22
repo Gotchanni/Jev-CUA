@@ -15,11 +15,15 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/configure-pages@v5
       - name: Build read-only showcase
         run: python scripts/build_pages.py --build
       - uses: actions/upload-pages-artifact@v4
