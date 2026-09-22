@@ -255,7 +255,26 @@ def main() -> int:
                 )
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest = output_dir / "manifest.json"
-    manifest.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    previous: list[dict[str, Any]] = []
+    if manifest.is_file():
+        try:
+            loaded = json.loads(manifest.read_text(encoding="utf-8"))
+            if isinstance(loaded, list):
+                previous = [item for item in loaded if isinstance(item, dict)]
+        except (OSError, json.JSONDecodeError):
+            previous = []
+    replaced = {(item["task"], item["profile"]) for item in results}
+    merged = [item for item in previous if (item.get("task"), item.get("profile")) not in replaced]
+    merged.extend(results)
+    task_order = {task: index for index, task in enumerate(SUITE_NAMES)}
+    profile_order = {"adaptive": 0, "visible": 1}
+    merged.sort(
+        key=lambda item: (
+            task_order.get(str(item.get("task")), len(task_order)),
+            profile_order.get(str(item.get("profile")), len(profile_order)),
+        )
+    )
+    manifest.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding="utf-8")
     passed = all(item["metrics"]["success"] for item in results)
     print(f"manifest={manifest} passed={passed}", flush=True)
     return 0 if passed else 1

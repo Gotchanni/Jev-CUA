@@ -381,20 +381,49 @@ class FileOrganizationTask:
                 return {"backend": "pyautogui", "window": window.window_text()}
             if candidate.capability == "notepad.screen_write_text":
                 path = Path(candidate.arguments["path"])
-                subprocess.Popen(
+                process = subprocess.Popen(
                     ["notepad.exe", str(path)],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                self.screen.focus(rf".*{re.escape(path.name)}.*", maximize=False)
+                try:
+                    from pywinauto import Desktop
+                except ImportError:
+                    raise RuntimeError("pywinauto is required for visible Notepad actions") from None
+                deadline = time.time() + 45
+                handle = None
+                while time.time() < deadline and handle is None:
+                    windows = Desktop(backend="uia").windows(visible_only=True)
+                    process_windows = [
+                        window
+                        for window in windows
+                        if window.element_info.process_id == process.pid
+                    ]
+                    title_windows = [
+                        window
+                        for window in windows
+                        if re.search(re.escape(path.name), window.window_text(), re.IGNORECASE)
+                    ]
+                    matches = process_windows or title_windows
+                    if matches:
+                        handle = matches[-1].handle
+                        break
+                    time.sleep(0.25)
+                if handle is None:
+                    raise RuntimeError(f"visible Notepad window not found for {path.name}")
+                self.screen.focus_handle(handle, maximize=False)
                 self.screen.hotkey("ctrl", "a")
                 self.screen.paste_text(candidate.arguments["text"])
                 self.screen.hotkey("ctrl", "s")
                 deadline = time.time() + 10
-                while time.time() < deadline and not path.exists():
+                expected = candidate.arguments["text"]
+                while time.time() < deadline:
+                    if path.is_file() and path.read_text(encoding="utf-8") == expected:
+                        break
                     time.sleep(0.2)
-                if not path.exists():
-                    raise RuntimeError("physical Notepad save did not create the manifest")
+                else:
+                    raise RuntimeError("physical Notepad save did not persist the expected text")
+                self.screen.hotkey("alt", "f4")
                 return {"backend": "pyautogui", "path": str(path)}
             raise ValueError(f"unsupported screen capability: {candidate.capability}")
 
