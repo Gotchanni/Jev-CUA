@@ -18,6 +18,7 @@ from .policy import JevPolicy, RulePolicy
 from .registry import ExecutorRegistry
 from .runtime import AgentRuntime
 from .sandbox import FileOrganizationTask, sandbox_mcp_executor
+from .suites import SUITE_NAMES, make_suite
 from .trace import JsonlTrace
 
 
@@ -46,6 +47,15 @@ def _parser() -> argparse.ArgumentParser:
     experiment.add_argument("--workspace", default="demo-workspace/experiment")
     experiment.add_argument("--output", default="runs/experiment-summary.json")
     experiment.add_argument("--trace", default="runs/experiment.jsonl")
+    suite = sub.add_parser("suite", help="Run complete representative application tasks")
+    suite.add_argument("--task", choices=(*SUITE_NAMES, "all"), default="all")
+    suite.add_argument("--policy", choices=("rule", "jev"), default="rule")
+    suite.add_argument("--episodes", type=int, default=1)
+    suite.add_argument("--workspace", default="demo-workspace/suites")
+    suite.add_argument("--output", default="runs/suite-summary.json")
+    suite.add_argument("--trace", default="runs/suite.jsonl")
+    suite.add_argument("--headed-edge", action="store_true")
+    suite.add_argument("--open-vscode", action="store_true")
     return parser
 
 
@@ -64,6 +74,22 @@ def _episode_runner(policy_name: str, workspace: Path, trace: Path) -> EpisodeRu
         )
 
     return EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=5))
+
+
+def _suite_runner(policy_name: str, trace: Path) -> EpisodeRunner:
+    def runtime_factory(environment) -> AgentRuntime:
+        executors = ExecutorRegistry()
+        for channel, executor in environment.executor_bindings().items():
+            executors.register(channel, executor)
+        policy = JevPolicy() if policy_name == "jev" else RulePolicy()
+        return AgentRuntime(
+            policy=policy,
+            guard=ActionGuard(allowed_roots=environment.allowed_roots, allow_writes=True),
+            executors=executors,
+            trace=JsonlTrace(trace),
+        )
+
+    return EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=8, timeout_s=180))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -117,6 +143,40 @@ def main(argv: list[str] | None = None) -> int:
         summary = experiment.summary()
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         return 0 if summary["successes"] == args.episodes else 1
+    if args.command == "suite":
+        if args.episodes < 1:
+            raise SystemExit("--episodes must be positive")
+        names = SUITE_NAMES if args.task == "all" else (args.task,)
+        workspace = Path(args.workspace).resolve()
+        trace_base = Path(args.trace)
+        summaries = []
+        all_passed = True
+        for name in names:
+            trace = trace_base.with_name(f"{trace_base.stem}-{name}{trace_base.suffix}")
+            runner = _suite_runner(args.policy, trace)
+            result = ExperimentRunner(runner).run(
+                lambda suite_name=name: make_suite(
+                    suite_name,
+                    workspace,
+                    headed_edge=args.headed_edge,
+                    open_vscode=args.open_vscode,
+                ),
+                args.episodes,
+            )
+            summary = result.summary()
+            summaries.append(summary)
+            all_passed &= summary["successes"] == args.episodes
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "policy": args.policy,
+            "requested_episodes": args.episodes,
+            "all_passed": all_passed,
+            "suites": summaries,
+        }
+        output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0 if all_passed else 1
     policy = JevPolicy() if args.policy == "jev" else RulePolicy()
     try:
         if args.command == "benchmark":

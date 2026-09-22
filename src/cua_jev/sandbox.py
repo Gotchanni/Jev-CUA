@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .episode import Evaluation
-from .executors import InProcessMcpExecutor
+from .executors import ControlExecutor, FileSystemExecutor, InProcessMcpExecutor
 from .models import ActionCandidate, ActionReceipt, Channel, Observation, Risk, Verification
 from .runtime import StepResult
 
@@ -21,6 +21,15 @@ def sandbox_mcp_executor() -> InProcessMcpExecutor:
         return {"source": str(source.resolve()), "destination": str(destination.resolve())}
 
     executor.register_tool("mcp.filesystem.copy", copy_file)
+
+    def write_text(arguments):
+        path = Path(arguments["path"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        text = str(arguments["text"])
+        path.write_text(text, encoding=arguments.get("encoding", "utf-8"))
+        return {"path": str(path.resolve()), "characters": len(text)}
+
+    executor.register_tool("mcp.filesystem.write_text", write_text)
     return executor
 
 
@@ -42,6 +51,17 @@ class FileOrganizationTask:
         self.source.write_text("quarter=Q3\nrevenue=120\n", encoding="utf-8")
         if self.destination.exists():
             self.destination.unlink()
+
+    @property
+    def allowed_roots(self) -> tuple[Path, ...]:
+        return (self.workspace,)
+
+    def executor_bindings(self) -> dict[Channel, object]:
+        return {
+            Channel.API: FileSystemExecutor(),
+            Channel.MCP: sandbox_mcp_executor(),
+            Channel.CONTROL: ControlExecutor(),
+        }
 
     def observe(self, history: Sequence[StepResult]) -> Observation:
         destination_exists = self.destination.exists()

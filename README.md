@@ -41,7 +41,7 @@ The shared runtime is functional and covered by tests:
 - deterministic rule policy for a no-key baseline and ablation experiments;
 - content-addressed Jev record/replay and cache-only execution;
 - repeated experiment summaries with channel counts, failure statuses and Wilson 95% intervals;
-- a reproducible multi-channel routing demo.
+- four resettable end-to-end suites plus a reproducible multi-channel routing demo.
 
 Initial capability adapters:
 
@@ -77,6 +77,7 @@ cua-jev demo --policy rule
 cua-jev episode-demo --policy rule
 cua-jev experiment --policy rule --episodes 10
 cua-jev tasks
+cua-jev suite --task all --policy rule
 ```
 
 It creates a small report under `demo-workspace/`, offers three equivalent read-only routes—typed filesystem
@@ -88,11 +89,23 @@ routes, executes one, observes the changed filesystem, emits `control.done`, and
 after an independent byte-for-byte verifier. `experiment` repeats this resettable episode without dropping
 failures from the denominator.
 
+The complete suite command runs four representative tasks:
+
+- Edge launches an isolated system Edge session, filters a local DOM fixture and downloads a CSV;
+- Excel creates a workbook, writes a real formula, builds a chart and reopens the file for COM verification;
+- VS Code/Terminal repairs a failing Python project through API or MCP and reruns its real unit test;
+- Explorer routes a report copy through API or MCP and verifies exact file contents.
+
+Use `--headed-edge` to make the browser visible for recording and `--open-vscode` to open the generated
+project in VS Code. Every task is reset before each episode, and summary JSON plus per-task JSONL traces are
+written under `runs/` by default.
+
 To run the same candidates through real Jev:
 
 ```powershell
 $env:TYPESAFE_API_KEY = "your-key"
 cua-jev demo --policy jev
+cua-jev suite --task all --policy jev
 ```
 
 Validate only the API decision path, or repeat the frozen task for reliability measurements:
@@ -181,18 +194,17 @@ probabilities.
 
 v0.1 focuses on the action router and execution contract. Next milestones are:
 
-1. complete four reproducible Windows task suites for Edge, Excel, VS Code and Explorer;
-2. add DOM/UIA/Excel-specific state verifiers and reset fixtures;
-3. add a standard remote MCP transport behind the current typed tool boundary;
-4. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
+1. add a native Windows UIA task alongside the Explorer filesystem task;
+2. replace the in-process demo MCP tools with configurable remote MCP servers;
+3. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
+4. add action fallback/recovery policies and richer DOM/UIA/Excel predicates;
 5. add an optional VLM fallback only for observations that DOM/UIA/COM cannot resolve.
 
 ## Honest v0.1 boundary
 
-The closed-loop sandbox task is executable today. The Edge, Excel, Explorer and VS Code frozen task files
-bind reset rules, capability packs, success criteria and step budgets, while their live application suites
-remain the next implementation milestone. CUA-JEV v0.1 targets predefined tasks with structured DOM,
-UIA, COM, terminal and filesystem state. It does not understand arbitrary screenshots, generate arbitrary
-shell commands, or claim general Windows autonomy.
+The four representative suites are executable today, but they are deliberately frozen fixtures rather than
+open-ended desktop tasks. CUA-JEV v0.1 targets predefined tasks with structured DOM, UIA, COM, terminal and
+filesystem state. It does not understand arbitrary screenshots, generate arbitrary shell commands, recover
+from every application dialog, or claim general Windows autonomy.
 
 Apache-2.0 licensed.

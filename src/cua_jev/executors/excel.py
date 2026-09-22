@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 from typing import Any
 
 from ..errors import CapabilityUnavailable
@@ -20,6 +21,7 @@ class ExcelComExecutor:
                 import win32com.client
             except ImportError:
                 raise CapabilityUnavailable("install cua-jev[windows] for Excel COM") from None
+            pythoncom.CoInitialize()
             args = candidate.arguments
             owned_instance = "workbook_path" in args
             if owned_instance:
@@ -30,6 +32,9 @@ class ExcelComExecutor:
                 except pythoncom.com_error:
                     raise CapabilityUnavailable("no running Excel instance is available") from None
             workbook = None
+            sheet = None
+            target = None
+            chart = None
             try:
                 excel.Visible = self.visible
                 excel.DisplayAlerts = False
@@ -55,7 +60,11 @@ class ExcelComExecutor:
                         "value": value,
                     }
                 if candidate.capability == "excel.write_range":
-                    sheet.Range(args["range"]).Value = args["value"]
+                    target = sheet.Range(args["range"])
+                    if "formula" in args:
+                        target.Formula = args["formula"]
+                    else:
+                        target.Value = args["value"]
                     if args.get("save", True):
                         workbook.Save()
                     return {"workbook": workbook.Name, "sheet": sheet.Name, "range": args["range"]}
@@ -70,8 +79,14 @@ class ExcelComExecutor:
                 raise ValueError(f"unsupported Excel capability: {candidate.capability}")
             finally:
                 if owned_instance:
+                    del chart, target, sheet
+                    gc.collect()
                     if workbook is not None:
                         workbook.Close(SaveChanges=False)
+                    del workbook
                     excel.Quit()
+                    del excel
+                    gc.collect()
+                pythoncom.CoUninitialize()
 
         return execute_with_receipt(candidate, observation_id, decision_id, operation)

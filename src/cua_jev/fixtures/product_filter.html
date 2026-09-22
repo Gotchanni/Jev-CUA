@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8">
+  <title>CUA-JEV Product Fixture</title>
+  <body>
+    <h1>Product export</h1>
+    <label>Category <input id="query" aria-label="Category"></label>
+    <button id="filter">Filter</button>
+    <p id="status" data-state="idle">Waiting</p>
+    <a id="download" hidden download="products.csv">Download CSV</a>
+    <script>
+      document.querySelector('#filter').addEventListener('click', () => {
+        const query = document.querySelector('#query').value.trim().toLowerCase();
+        const status = document.querySelector('#status');
+        const download = document.querySelector('#download');
+        if (query !== 'laptop') {
+          status.dataset.state = 'invalid';
+          status.textContent = 'No matching category';
+          download.hidden = true;
+          return;
+        }
+        const blob = new Blob(['product,category,price\nThinkPad,laptop,999\n'], {type: 'text/csv'});
+        download.href = URL.createObjectURL(blob);
+        download.hidden = false;
+        status.dataset.state = 'complete';
+        status.textContent = '1 result ready';
+      });
+    </script>
+  </body>
+</html>

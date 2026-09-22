@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -95,7 +96,9 @@ class EpisodeRunner:
     """Closed-loop task runner with deterministic termination boundaries."""
 
     def __init__(
-        self, runtime_factory: Callable[[], AgentRuntime], config: EpisodeConfig | None = None
+        self,
+        runtime_factory: Callable[..., AgentRuntime],
+        config: EpisodeConfig | None = None,
     ) -> None:
         self.runtime_factory = runtime_factory
         self.config = config or EpisodeConfig()
@@ -105,7 +108,8 @@ class EpisodeRunner:
         history: list[StepResult] = []
         fingerprints: list[str] = []
         actions: list[str] = []
-        runtime = self.runtime_factory()
+        parameters = inspect.signature(self.runtime_factory).parameters
+        runtime = self.runtime_factory(environment) if parameters else self.runtime_factory()
         status = EpisodeStatus.ENVIRONMENT_ERROR
         reason = "episode did not start"
         try:
@@ -164,6 +168,9 @@ class EpisodeRunner:
         close = getattr(runtime.policy, "close", None)
         if close:
             close()
+        close_environment = getattr(environment, "close", None)
+        if close_environment:
+            close_environment()
         return result
 
     def _is_stuck(self, fingerprints: Sequence[str], actions: Sequence[str]) -> bool:
