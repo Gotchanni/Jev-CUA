@@ -168,10 +168,8 @@ def run_one(
         "status": "starting",
     }
     recorder = DesktopRecorder(output, state, fps=fps, max_width=max_width) if output else None
+    recorder_started = False
     try:
-        if recorder:
-            recorder.start()
-            time.sleep(0.8)
         record = manager.create(
             {
                 "task": task,
@@ -185,6 +183,12 @@ def run_one(
         while True:
             detail = manager.detail(record["id"])
             _update_state(state, detail)
+            if recorder and not recorder_started and (
+                state["step"] > 0 or detail["status"] != "running"
+            ):
+                recorder.start()
+                recorder_started = True
+                time.sleep(0.25)
             if detail["status"] != "running":
                 break
             time.sleep(0.25)
@@ -204,7 +208,7 @@ def run_one(
             "metrics": detail["metrics"],
         }
     finally:
-        if recorder:
+        if recorder and recorder_started:
             recorder.stop()
 
 
