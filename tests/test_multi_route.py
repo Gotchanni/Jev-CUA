@@ -36,7 +36,7 @@ def test_excel_offers_com_and_file_api_routes(tmp_path: Path) -> None:
 
     candidates = task.candidates(observation, ())
     assert channels(candidates) == {Channel.GUI, Channel.SCRIPT, Channel.API}
-    assert len({candidate.intent for candidate in candidates}) == 4
+    assert len({candidate.intent for candidate in candidates}) == 6
 
 
 def test_vscode_offers_three_repair_routes(tmp_path: Path) -> None:
@@ -103,6 +103,8 @@ def test_visible_profile_keeps_parallel_excel_intents_but_only_gui(tmp_path: Pat
     assert {candidate.intent for candidate in candidates} == {
         "calculate_total",
         "calculate_average",
+        "find_maximum",
+        "count_products",
         "mark_reviewed",
         "visualize_revenue",
     }
@@ -127,6 +129,58 @@ def test_adaptive_edge_offers_physical_and_dom_routes(tmp_path: Path) -> None:
     candidates = task.candidates(observation, ())
     assert channels(candidates) == {Channel.GUI, Channel.SCRIPT}
     assert {candidate.intent for candidate in candidates} == {"enter_username"}
+
+
+def test_adaptive_edge_exposes_complete_long_horizon_checkout(tmp_path: Path) -> None:
+    task = EdgeProductTask(tmp_path, demo_mode=True, adaptive_mode=True)
+    base = {
+        "url": "https://www.saucedemo.com/inventory.html",
+        "logged_in": True,
+        "username": "standard_user",
+        "password_entered": True,
+        "sort": "lohi",
+        "cart_count": "1",
+        "cart_open": False,
+        "checkout_form": False,
+        "checkout_review": False,
+        "checkout_complete": False,
+        "backpack_present": False,
+        "bike_light_present": False,
+        "first_name": "",
+        "last_name": "",
+        "postal_code": "",
+    }
+
+    observation = Observation("task", "cart", base)
+    assert {item.intent for item in task.candidates(observation, ())} == {"add_second_product"}
+
+    cart = {**base, "url": "https://www.saucedemo.com/cart.html", "cart_count": "2"}
+    cart.update(cart_open=True, backpack_present=True, bike_light_present=True)
+    assert {item.intent for item in task.candidates(Observation("task", "cart", cart), ())} == {
+        "begin_checkout"
+    }
+
+    form = {**base, "url": "https://www.saucedemo.com/checkout-step-one.html"}
+    form.update(checkout_form=True, cart_count="2")
+    assert {item.intent for item in task.candidates(Observation("task", "form", form), ())} == {
+        "enter_first_name"
+    }
+    form.update(first_name="Ada", last_name="Lovelace", postal_code="310027")
+    assert {item.intent for item in task.candidates(Observation("task", "form", form), ())} == {
+        "continue_checkout"
+    }
+
+    review = {**base, "url": "https://www.saucedemo.com/checkout-step-two.html"}
+    review.update(checkout_review=True, cart_count="2")
+    assert {item.intent for item in task.candidates(Observation("task", "review", review), ())} == {
+        "finish_checkout"
+    }
+
+    complete = {**base, "url": "https://www.saucedemo.com/checkout-complete.html"}
+    complete.update(checkout_complete=True, cart_count="0")
+    candidates = task.candidates(Observation("task", "complete", complete), ())
+    assert len(candidates) == 1
+    assert candidates[0].capability == "control.done"
 
 
 def test_adaptive_excel_offers_physical_and_live_com_routes(tmp_path: Path) -> None:

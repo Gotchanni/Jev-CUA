@@ -132,17 +132,29 @@ class EdgeProductTask:
             locator = self._page.locator(selector)
             return locator.input_value() if locator.count() else ""
 
-        logged_in = any(path in url for path in ("/inventory.html", "/cart.html"))
-        in_cart = (
-            self._page.locator(".inventory_item_name").filter(has_text="Sauce Labs Backpack").count() > 0
-            and "/cart.html" in url
+        logged_in = any(
+            path in url
+            for path in (
+                "/inventory.html",
+                "/cart.html",
+                "/checkout-step-one.html",
+                "/checkout-step-two.html",
+                "/checkout-complete.html",
+            )
         )
+        backpack_present = (
+            self._page.locator(".inventory_item_name").filter(has_text="Sauce Labs Backpack").count() > 0
+        )
+        bike_light_present = (
+            self._page.locator(".inventory_item_name").filter(has_text="Sauce Labs Bike Light").count() > 0
+        )
+        checkout_complete = "/checkout-complete.html" in url
         return Observation(
             task=(
                 "Use the public SauceDemo store in Edge: sign in, sort products by price, "
-                "add the backpack, and verify it in the cart."
+                "build a two-item cart, complete checkout, and verify the receipt."
             ),
-            subgoal="Verify cart" if in_cart else "Advance the live browser workflow",
+            subgoal="Verify checkout receipt" if checkout_complete else "Advance the live browser workflow",
             state={
                 "url": url,
                 "public_site": "saucedemo.com",
@@ -156,7 +168,19 @@ class EdgeProductTask:
                     else "0"
                 ),
                 "cart_open": "/cart.html" in url,
-                "backpack_in_cart": in_cart,
+                "backpack_present": backpack_present,
+                "bike_light_present": bike_light_present,
+                "checkout_form": "/checkout-step-one.html" in url,
+                "checkout_review": "/checkout-step-two.html" in url,
+                "checkout_complete": checkout_complete,
+                "first_name": value("#first-name"),
+                "last_name": value("#last-name"),
+                "postal_code": value("#postal-code"),
+                "receipt_text": (
+                    self._page.locator(".complete-header").text_content()
+                    if self._page.locator(".complete-header").count()
+                    else ""
+                ),
             },
             source=self.name,
         )
@@ -406,14 +430,106 @@ class EdgeProductTask:
                     intent="sign_in",
                 ),
             )
-        if state["cart_open"]:
+        if state.get("checkout_complete"):
             return (
                 ActionCandidate(
                     "done",
                     Channel.CONTROL,
                     "control.done",
-                    "Declare completion after the live cart contains Sauce Labs Backpack.",
+                    "Declare completion only after the live checkout receipt is visible.",
                     intent="finish",
+                ),
+            )
+        if state.get("checkout_form"):
+            fields = (
+                ("first_name", "Ada", "#first-name", "enter_first_name"),
+                ("last_name", "Lovelace", "#last-name", "enter_last_name"),
+                ("postal_code", "310027", "#postal-code", "enter_postal_code"),
+            )
+            for key, text, selector, intent in fields:
+                if state[key] != text:
+                    return self._live_routes(
+                        ActionCandidate(
+                            f"gui_{intent}",
+                            Channel.GUI,
+                            "edge.fill",
+                            f"Enter checkout field {key} with physical keyboard input.",
+                            {"selector": selector, "text": text},
+                            Risk.LOCAL_WRITE,
+                            intent=intent,
+                        ),
+                        ActionCandidate(
+                            f"dom_{intent}",
+                            Channel.SCRIPT,
+                            "edge.fill",
+                            f"Enter checkout field {key} through the live DOM route.",
+                            {"selector": selector, "text": text},
+                            Risk.LOCAL_WRITE,
+                            intent=intent,
+                        ),
+                    )
+            return self._live_routes(
+                ActionCandidate(
+                    "gui_continue_checkout",
+                    Channel.GUI,
+                    "edge.click",
+                    "Continue from the checkout form with the physical mouse.",
+                    {"selector": "#continue"},
+                    Risk.LOCAL_WRITE,
+                    intent="continue_checkout",
+                ),
+                ActionCandidate(
+                    "dom_continue_checkout",
+                    Channel.SCRIPT,
+                    "edge.click",
+                    "Continue from the checkout form through the live DOM route.",
+                    {"selector": "#continue"},
+                    Risk.LOCAL_WRITE,
+                    intent="continue_checkout",
+                ),
+            )
+        if state.get("checkout_review"):
+            return self._live_routes(
+                ActionCandidate(
+                    "gui_finish_checkout",
+                    Channel.GUI,
+                    "edge.click",
+                    "Finish the reviewed order with the physical mouse.",
+                    {"selector": "#finish"},
+                    Risk.LOCAL_WRITE,
+                    intent="finish_checkout",
+                ),
+                ActionCandidate(
+                    "dom_finish_checkout",
+                    Channel.SCRIPT,
+                    "edge.click",
+                    "Finish the reviewed order through the live DOM route.",
+                    {"selector": "#finish"},
+                    Risk.LOCAL_WRITE,
+                    intent="finish_checkout",
+                ),
+            )
+        if state["cart_open"]:
+            if not (state.get("backpack_present") and state.get("bike_light_present")):
+                raise RuntimeError("live cart lost one of the required products")
+            return self._live_routes(
+                ActionCandidate(
+                    "gui_begin_checkout",
+                    Channel.GUI,
+                    "edge.click",
+                    "Start checkout from the validated cart with the physical mouse.",
+                    {"selector": "#checkout"},
+                    Risk.LOCAL_WRITE,
+                    intent="begin_checkout",
+                ),
+                ActionCandidate(
+                    "dom_begin_checkout",
+                    Channel.SCRIPT,
+                    "edge.click",
+                    "Start checkout from the validated cart through the live DOM route.",
+                    {"selector": "#checkout"},
+                    Risk.LOCAL_WRITE,
+                    intent="begin_checkout",
                 ),
             )
         if state["sort"] != "lohi":
@@ -437,7 +553,7 @@ class EdgeProductTask:
                     intent="sort_products",
                 ),
             )
-        if state["cart_count"] != "1":
+        if state["cart_count"] == "0":
             return self._live_routes(
                 ActionCandidate(
                     "gui_add_backpack",
@@ -456,6 +572,27 @@ class EdgeProductTask:
                     {"selector": "#add-to-cart-sauce-labs-backpack"},
                     Risk.LOCAL_WRITE,
                     intent="add_product",
+                ),
+            )
+        if state["cart_count"] == "1":
+            return self._live_routes(
+                ActionCandidate(
+                    "gui_add_bike_light",
+                    Channel.GUI,
+                    "edge.click",
+                    "Add Sauce Labs Bike Light to the cart with the physical mouse.",
+                    {"selector": "#add-to-cart-sauce-labs-bike-light"},
+                    Risk.LOCAL_WRITE,
+                    intent="add_second_product",
+                ),
+                ActionCandidate(
+                    "dom_add_bike_light",
+                    Channel.SCRIPT,
+                    "edge.click",
+                    "Add Sauce Labs Bike Light through the live DOM route.",
+                    {"selector": "#add-to-cart-sauce-labs-bike-light"},
+                    Risk.LOCAL_WRITE,
+                    intent="add_second_product",
                 ),
             )
         if not state["cart_open"]:
@@ -624,11 +761,11 @@ class EdgeProductTask:
             return Evaluation(False, False, "browser_step_completed; reobserve")
         if self.demo_mode:
             state = self._observe_live_edge().state
-            valid = bool(state["backpack_in_cart"] and state["cart_open"])
+            valid = bool(state["checkout_complete"] and state["receipt_text"] == "Thank you for your order!")
             return Evaluation(
                 valid,
                 True,
-                "live_edge_cart_verified" if valid else "live_edge_cart_invalid",
+                "live_edge_checkout_verified" if valid else "live_edge_checkout_invalid",
             )
         payload = self.download.read_text("utf-8") if self.download.is_file() else ""
         valid = "ThinkPad,laptop,999,true" in payload and "Surface,laptop,1099,true" in payload
@@ -701,16 +838,21 @@ class ExcelSalesTask:
             data.Name = "Data"
             summary = book.Worksheets.Add(After=data)
             summary.Name = "Summary"
-            data.Range("A1:B4").Value = (
-                ("Product", "Revenue"),
-                ("Laptop", 120),
-                ("Monitor", 80),
-                ("Keyboard", 100),
+            data.Range("A1:C7").Value = (
+                ("Product", "Units", "Revenue"),
+                ("Laptop", 2, 240),
+                ("Monitor", 3, 240),
+                ("Keyboard", 5, 500),
+                ("Mouse", 4, 160),
+                ("Dock", 2, 220),
+                ("Headset", 3, 180),
             )
-            summary.Range("A1:B4").Value = (
+            summary.Range("A1:B6").Value = (
                 ("Metric", "Value"),
                 ("Total revenue", None),
                 ("Average revenue", None),
+                ("Maximum revenue", None),
+                ("Product count", None),
                 ("Review status", None),
             )
             book.SaveAs(str(self.workbook), 51)
@@ -763,7 +905,11 @@ class ExcelSalesTask:
                     formula = summary.Range("B2").Formula
                     average = summary.Range("B3").Value
                     average_formula = summary.Range("B3").Formula
-                    review_status = summary.Range("B4").Value
+                    maximum = summary.Range("B4").Value
+                    maximum_formula = summary.Range("B4").Formula
+                    product_count = summary.Range("B5").Value
+                    count_formula = summary.Range("B5").Formula
+                    review_status = summary.Range("B6").Value
                     charts = sum(
                         self._demo_book.Worksheets(i).ChartObjects().Count
                         for i in range(1, self._demo_book.Worksheets.Count + 1)
@@ -773,7 +919,18 @@ class ExcelSalesTask:
                     if time.time() >= deadline:
                         raise
                     time.sleep(0.25)
-            return self._observation(value, formula, average, average_formula, review_status, charts)
+            return self._observation(
+                value,
+                formula,
+                average,
+                average_formula,
+                maximum,
+                maximum_formula,
+                product_count,
+                count_formula,
+                review_status,
+                charts,
+            )
         pythoncom, win32 = self._excel_modules()
         pythoncom.CoInitialize()
         excel = win32.DispatchEx("Excel.Application")
@@ -788,7 +945,11 @@ class ExcelSalesTask:
             formula = summary.Range("B2").Formula
             average = summary.Range("B3").Value
             average_formula = summary.Range("B3").Formula
-            review_status = summary.Range("B4").Value
+            maximum = summary.Range("B4").Value
+            maximum_formula = summary.Range("B4").Formula
+            product_count = summary.Range("B5").Value
+            count_formula = summary.Range("B5").Formula
+            review_status = summary.Range("B6").Value
             charts = sum(book.Worksheets(i).ChartObjects().Count for i in range(1, book.Worksheets.Count + 1))
         finally:
             del summary
@@ -800,7 +961,18 @@ class ExcelSalesTask:
             del excel
             gc.collect()
             pythoncom.CoUninitialize()
-        return self._observation(value, formula, average, average_formula, review_status, charts)
+        return self._observation(
+            value,
+            formula,
+            average,
+            average_formula,
+            maximum,
+            maximum_formula,
+            product_count,
+            count_formula,
+            review_status,
+            charts,
+        )
 
     def _observation(
         self,
@@ -808,13 +980,26 @@ class ExcelSalesTask:
         formula,
         average,
         average_formula,
+        maximum,
+        maximum_formula,
+        product_count,
+        count_formula,
         review_status,
         charts,
     ) -> Observation:
         return Observation(
-            task="Calculate total sales revenue and create a product revenue chart.",
+            task=(
+                "Build a reviewed sales summary with four independent metrics and two charts, "
+                "then verify the saved workbook through a fresh Excel process."
+            ),
             subgoal="Verify workbook"
-            if value == 300 and average == 100 and charts and review_status == "Reviewed"
+            if value == 1540
+            and average is not None
+            and abs(float(average) - (1540 / 6)) < 0.001
+            and maximum == 500
+            and product_count == 6
+            and charts >= 2
+            and review_status == "Reviewed"
             else "Choose the next incomplete workbook operation",
             state={
                 "workbook_path": str(self.workbook),
@@ -822,6 +1007,10 @@ class ExcelSalesTask:
                 "summary_formula": formula,
                 "average_value": average,
                 "average_formula": average_formula,
+                "maximum_value": maximum,
+                "maximum_formula": maximum_formula,
+                "product_count": product_count,
+                "count_formula": count_formula,
                 "review_status": review_status,
                 "chart_count": charts,
             },
@@ -880,29 +1069,34 @@ class ExcelSalesTask:
                 )
             )
 
-        if state["summary_value"] != 300:
-            add_cell_routes("calculate_total", "write_total_formula", "B2", formula="=SUM(Data!B2:B4)")
-        if state["average_value"] != 100:
+        if state["summary_value"] != 1540:
+            add_cell_routes("calculate_total", "write_total_formula", "B2", formula="=SUM(Data!C2:C7)")
+        if state["average_value"] is None or abs(float(state["average_value"]) - (1540 / 6)) >= 0.001:
             add_cell_routes(
-                "calculate_average", "write_average_formula", "B3", formula="=AVERAGE(Data!B2:B4)"
+                "calculate_average", "write_average_formula", "B3", formula="=AVERAGE(Data!C2:C7)"
             )
+        if state.get("maximum_value") != 500:
+            add_cell_routes("find_maximum", "write_max_formula", "B4", formula="=MAX(Data!C2:C7)")
+        if state.get("product_count") != 6:
+            add_cell_routes("count_products", "write_count_formula", "B5", formula="=COUNTA(Data!A2:A7)")
         if state["review_status"] != "Reviewed":
-            add_cell_routes("mark_reviewed", "mark_reviewed", "B4", value="Reviewed")
+            add_cell_routes("mark_reviewed", "mark_reviewed", "B6", value="Reviewed")
         if state["chart_count"] < 1:
             com_args = {
                 "workbook_path": str(self.workbook),
                 "sheet": "Data",
-                "range": "A1:B4",
+                "range": "A1:C7",
                 "title": "Revenue by product",
             }
             file_args = {
                 "workbook_path": str(self.workbook),
                 "sheet": "Data",
-                "max_row": 4,
+                "max_row": 7,
                 "title": "Revenue by product",
                 "x_axis_title": "Product",
                 "y_axis_title": "Revenue",
                 "anchor": "D2",
+                "value_column": 3,
             }
             if self.visible:
                 pending.append(
@@ -935,6 +1129,57 @@ class ExcelSalesTask:
                         file_args,
                         Risk.LOCAL_WRITE,
                         intent="visualize_revenue",
+                    ),
+                )
+            )
+        if state["chart_count"] == 1:
+            com_args = {
+                "workbook_path": str(self.workbook),
+                "sheet": "Data",
+                "range": "A1:B7",
+                "title": "Units by product",
+            }
+            file_args = {
+                "workbook_path": str(self.workbook),
+                "sheet": "Data",
+                "max_row": 7,
+                "title": "Units by product",
+                "x_axis_title": "Product",
+                "y_axis_title": "Units",
+                "anchor": "D18",
+                "value_column": 2,
+            }
+            if self.visible:
+                pending.append(
+                    ActionCandidate(
+                        "gui_create_units_chart",
+                        Channel.GUI,
+                        "excel.create_chart",
+                        "Create the units chart in a visible Excel window.",
+                        com_args,
+                        Risk.LOCAL_WRITE,
+                        intent="visualize_units",
+                    )
+                )
+            pending.extend(
+                (
+                    ActionCandidate(
+                        "com_create_units_chart",
+                        Channel.SCRIPT,
+                        "excel.create_chart",
+                        "Create the units chart through background Excel COM.",
+                        com_args,
+                        Risk.LOCAL_WRITE,
+                        intent="visualize_units",
+                    ),
+                    ActionCandidate(
+                        "file_create_units_chart",
+                        Channel.API,
+                        "excel.file_create_chart",
+                        "Create the units chart through the workbook file API.",
+                        file_args,
+                        Risk.LOCAL_WRITE,
+                        intent="visualize_units",
                     ),
                 )
             )
@@ -1028,23 +1273,31 @@ class ExcelSalesTask:
         state = self.observe(())
         formula = str(state.state["summary_formula"]).upper()
         valid = (
-            state.state["summary_value"] == 300
+            state.state["summary_value"] == 1540
             and "SUM(" in formula
-            and state.state["average_value"] == 100
+            and abs(float(state.state["average_value"]) - (1540 / 6)) < 0.001
             and "AVERAGE(" in str(state.state["average_formula"]).upper()
+            and state.state["maximum_value"] == 500
+            and "MAX(" in str(state.state["maximum_formula"]).upper()
+            and state.state["product_count"] == 6
+            and "COUNTA(" in str(state.state["count_formula"]).upper()
             and state.state["review_status"] == "Reviewed"
-            and state.state["chart_count"] >= 1
+            and state.state["chart_count"] >= 2
         )
         return Evaluation(valid, True, "excel_workbook_verified" if valid else "excel_workbook_invalid")
 
 
 class VSCodeTerminalTask:
-    """Diagnose and repair two independent defects, rerunning tests after each mutation."""
+    """Diagnose and repair four independent defects, rerunning tests after each mutation."""
 
     name = "vscode-terminal-repair"
     corrected_source = (
         "def add(left, right):\n    return left + right\n\n\n"
-        "def multiply(left, right):\n    return left * right\n"
+        "def multiply(left, right):\n    return left * right\n\n\n"
+        "def subtract(left, right):\n    return left - right\n\n\n"
+        "def safe_divide(left, right):\n"
+        "    if right == 0:\n        raise ValueError('division by zero')\n"
+        "    return left / right\n"
     )
 
     def __init__(
@@ -1099,16 +1352,26 @@ class VSCodeTerminalTask:
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.source.write_text(
             "def add(left, right):\n    return left - right\n\n\n"
-            "def multiply(left, right):\n    return left + right\n",
+            "def multiply(left, right):\n    return left + right\n\n\n"
+            "def subtract(left, right):\n    return left + right\n\n\n"
+            "def safe_divide(left, right):\n"
+            "    if right == 0:\n        raise ValueError('division by zero')\n"
+            "    return left * right\n",
             encoding="utf-8",
         )
         self.test_file.write_text(
-            "import unittest\n\nfrom calc import add, multiply\n\n\n"
+            "import unittest\n\nfrom calc import add, multiply, safe_divide, subtract\n\n\n"
             "class CalcTest(unittest.TestCase):\n"
             "    def test_add(self):\n"
             "        self.assertEqual(add(2, 3), 5)\n\n"
             "    def test_multiply(self):\n"
             "        self.assertEqual(multiply(3, 4), 12)\n\n"
+            "    def test_subtract(self):\n"
+            "        self.assertEqual(subtract(9, 4), 5)\n\n"
+            "    def test_safe_divide(self):\n"
+            "        self.assertEqual(safe_divide(9, 3), 3)\n"
+            "        with self.assertRaises(ValueError):\n"
+            "            safe_divide(9, 0)\n\n"
             "if __name__ == '__main__':\n"
             "    unittest.main()\n",
             encoding="utf-8",
@@ -1171,8 +1434,8 @@ class VSCodeTerminalTask:
         test = self.last_test or {"returncode": None, "stdout": "", "stderr": "not run"}
         return Observation(
             task=(
-                "Diagnose two independent calculator defects, repair them through "
-                "safe tools, and prove both tests pass."
+                "Diagnose four independent calculator defects, repair them through heterogeneous "
+                "safe tools, rerun regression tests after every mutation, and prove the suite passes."
             ),
             subgoal="Run the test suite"
             if test["returncode"] is None
@@ -1185,6 +1448,8 @@ class VSCodeTerminalTask:
                 "source": source,
                 "add_fixed": "def add(left, right):\n    return left + right" in source,
                 "multiply_fixed": "def multiply(left, right):\n    return left * right" in source,
+                "subtract_fixed": "def subtract(left, right):\n    return left - right" in source,
+                "divide_fixed": "    return left / right" in source,
                 "vscode_opened": self.opened,
                 "test_returncode": test["returncode"],
                 "test_stdout": test["stdout"][-2000:],
@@ -1315,6 +1580,28 @@ class VSCodeTerminalTask:
                     "def multiply(left, right):\n    return left * right",
                     "    return left * right",
                     6,
+                )
+            if not observation.state.get("subtract_fixed", True):
+                add_repair_routes(
+                    "repair_subtraction",
+                    "repair_subtract",
+                    "def subtract(left, right):\n    return left + right",
+                    "def subtract(left, right):\n    return left - right",
+                    "    return left - right",
+                    10,
+                )
+            if not observation.state.get("divide_fixed", True):
+                add_repair_routes(
+                    "repair_division",
+                    "repair_divide",
+                    "def safe_divide(left, right):\n"
+                    "    if right == 0:\n        raise ValueError('division by zero')\n"
+                    "    return left * right\n",
+                    "def safe_divide(left, right):\n"
+                    "    if right == 0:\n        raise ValueError('division by zero')\n"
+                    "    return left / right\n",
+                    "    return left / right",
+                    16,
                 )
             if self.demo_mode and not self.adaptive_mode:
                 return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)

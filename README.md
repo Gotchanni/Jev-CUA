@@ -18,7 +18,7 @@ The reusable output is not the four example workflows by themselves. The project
 - a common candidate, guard, executor, receipt and verifier contract across heterogeneous Windows channels;
 - an action-space ablation (`Hybrid Action Space` versus `GUI Only`) that is independent of the decision
   policy;
-- complete JSONL decision evidence and an interactive trace explorer;
+- complete JSONL decision evidence and a read-only benchmark showcase;
 - a benchmark contract for Jev, deterministic policies and external agents such as Codex Computer Use;
 - four executable capability-pack examples showing how to add a new application and independent terminal
   verifier.
@@ -27,7 +27,15 @@ The current release is a reference implementation, not evidence that Jev is alre
 for general computer use. Four frozen workflows demonstrate feasibility. A publishable efficiency claim
 requires parameterized task families, repeated held-out trials, a successful GUI-only ablation and measured
 general-agent baselines under the same terminal verifiers. Until those results exist, treat the console as an
-experiment workbench and the capability interfaces as the main open-source contribution.
+evidence surface and the capability interfaces as the main open-source contribution.
+
+The distinctive hypothesis is **training-free action-space routing**. Many agent stacks collect tool-use
+trajectories and then apply SFT, reinforcement learning or distillation to obtain a small routing policy.
+CUA-JEV instead compiles the current structured state into a bounded set of legal, typed `intent × route`
+candidates and asks the existing Jev decision model to select among them online. This does not remove the
+engineering needed to build capability packs, but it avoids training a new router for every application and
+makes every choice inspectable. The long-horizon suites are designed to test whether small per-step routing
+advantages accumulate into meaningful end-to-end savings.
 
 The first prototype deliberately uses **no VLM**. It combines structured observations from Edge DOM,
 Windows UI Automation, Excel COM, VS Code/terminal text, filesystem APIs and MCP-shaped tools. In the
@@ -98,7 +106,7 @@ pytest
 python scripts/windows_smoke.py
 ```
 
-For the local experiment console used in demos:
+For the local read-only project showcase:
 
 ```powershell
 python -m pip install -e ".[dev,all,ui]"
@@ -106,25 +114,16 @@ $env:TYPESAFE_API_KEY = "your-key"  # omit when using the Rule baseline
 cua-jev-ui
 ```
 
-Open `http://127.0.0.1:8768`. **Hybrid Action Space** keeps real applications visible while the selected
-decision policy chooses both the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API
-route. **GUI Only** is the recordable action-space ablation: every mutation is performed visibly through
-PyAutoGUI. Jev and the deterministic Rule baseline can run against either action space, so policy and action
-space are not conflated. Historical runs load into the interactive Trace Explorer only when selected.
+Open `http://127.0.0.1:8768`. The page is deliberately a project introduction rather than an execution
+launcher. It explains the training-free routing hypothesis, the architecture, the four long-horizon cases and
+the measured Hybrid-versus-GUI evidence. Benchmark values are read from real local run records; missing paired
+samples remain visibly unavailable rather than being estimated. Run history stays under `runs/ui/`, and the
+page never accepts or stores an API key.
 
-Interactive Hybrid and GUI-only runs use a bounded, explicitly traced Rule fallback when a transient Jev
-transport outage persists after retries. Benchmark aggregation labels these runs `Jev + fallback` instead of
-mixing them into pure Jev samples, so API reliability problems are not hidden.
-
-The console shows the complete evidence chain: structured observation, the currently legal intent-and-route
-candidates, Jev probabilities, Guard approval, executor receipt and independent verification. The status
-strip labels the implementation pipeline `Observe → Route → Guard → Execute → Verify`; this is a CUA-JEV
-logging abstraction, not an official Jev protocol. The Benchmark Matrix aggregates only measured local runs
-and reports success rate, end-to-end time, decision time, execution time, action count, GUI share and route
-diversity. Fallback runs remain a separate cohort.
-Run history stays under `runs/ui/`; the key is inherited from the server environment and is never entered in
-or stored by the page. The console binds to localhost because its job is to operate local Windows
-applications, not to act as a hosted control plane.
+Experiments are launched explicitly from the CLI. **Hybrid Action Space** lets the selected policy choose both
+the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API route. **GUI Only** is the
+recordable action-space ablation: every mutation is performed visibly through PyAutoGUI. Jev and the
+deterministic Rule baseline can run against either action space, so policy and action space are not conflated.
 
 Codex Computer Use is treated as an external non-Jev runner, not relabelled Rule behavior. After Codex runs
 the same task and passes the same terminal verifier, import its measured result through the local-only
@@ -155,23 +154,23 @@ It creates a small report under `demo-workspace/`, offers three equivalent read-
 API, MCP and allowlisted PowerShell—selects one, executes it and writes the complete trace to
 `runs/demo.jsonl`.
 
-`episode-demo` is a real two-step closed loop. It resets a sandbox, offers filesystem API and MCP copy
-routes, executes one, observes the changed filesystem, emits `control.done`, and accepts completion only
-after an independent byte-for-byte verifier. `experiment` repeats this resettable episode without dropping
-failures from the denominator.
+`episode-demo` is a real eight-step publishing loop. It resets a mixed inbox, selects five eligible reports,
+offers filesystem API, MCP and CLI routes, writes a manifest and release note, then accepts completion only
+after independent byte-for-byte and exclusion checks. `experiment` repeats this resettable episode without
+dropping failures from the denominator.
 
 The complete suite command runs four multi-step, independently verified workflows:
 
 | Workflow | Required state transitions | Competing real routes |
 |---|---|---|
-| Edge public shopping | navigate to SauceDemo, sign in, sort low-to-high, add the requested product, open cart | PyAutoGUI in GUI Only; PyAutoGUI and live DOM in Hybrid |
-| Excel sales review | compute total, compute average, mark reviewed, create chart | PyAutoGUI in GUI Only; PyAutoGUI and live COM in Hybrid |
-| VS Code diagnosis | run failing tests, repair either independent defect, rerun, repair the other, prove green | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
-| Explorer publishing | distinguish final Q3 files from draft/prior-quarter distractors, archive both, write exact manifest | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
+| Edge long-horizon purchase | navigate, sign in, sort, add two products, validate cart, fill checkout, review and verify receipt (15 decisions) | PyAutoGUI in GUI Only; PyAutoGUI and live DOM in Hybrid |
+| Excel analysis delivery | compute total, average, maximum and count, mark reviewed, create two charts, verify through fresh COM (8 decisions) | PyAutoGUI in GUI Only; PyAutoGUI and live COM in Hybrid |
+| VS Code diagnosis | run four failing tests, repair one defect at a time through competing tools, rerun after every mutation, prove green (10 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
+| Explorer publishing | select five final Q3 reports among draft, prior-quarter and private distractors, archive them, write manifest and release note (8 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
 
 These are not four fixed action scripts. At each state, the task builder offers every currently legal
-**intent × execution route** pair. For example, the initial Excel state can expose twelve candidates across
-four pending subgoals and three backends; after one action, the remaining candidate set is rebuilt from the
+**intent × execution route** pair. For example, the initial Excel state can expose eighteen candidates across
+six pending subgoals and three backends; after one action, the remaining candidate set is rebuilt from the
 new workbook state. Jev therefore chooses both *what to do next* and *how to do it*.
 
 Use `--profile visible` for a recordable physical-GUI run. `--headed-edge`, `--open-vscode` and

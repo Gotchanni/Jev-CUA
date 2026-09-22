@@ -14,42 +14,48 @@ from typing import Any
 
 from ..suites import SUITE_NAMES
 
+BENCHMARK_VERSION = "long-horizon-v1"
+
 TASK_CATALOG = {
     "edge": {
-        "title": "Edge 公开站点购物",
-        "description": "打开 SauceDemo，登录、排序、加入购物车并核验真实页面状态。",
+        "title": "Edge 长程采购",
+        "description": "登录公开商店、排序、构建双商品购物车、填写结算信息并验证订单回执。",
         "gui_routes": ["PyAutoGUI · Edge", "DOM Observe", "DOM Verify"],
         "hybrid_routes": ["PyAutoGUI · Edge", "Playwright DOM", "DOM Verify"],
         "hybrid_channels": ["gui", "script"],
         "evaluation_routes": ["Visible Edge", "DOM Script", "Page API"],
-        "steps": 8,
+        "steps": 15,
+        "benchmark_version": BENCHMARK_VERSION,
     },
     "excel": {
-        "title": "Excel 销售汇总",
-        "description": "完成总计、均值、复核状态和图表，再由独立 COM 会话验证。",
+        "title": "Excel 分析交付",
+        "description": "计算四项指标、标记复核状态、创建两张图表，再由独立 COM 会话验证。",
         "gui_routes": ["PyAutoGUI · Excel", "COM Observe", "COM Verify"],
         "hybrid_routes": ["PyAutoGUI · Excel", "Live Excel COM", "COM Verify"],
         "hybrid_channels": ["gui", "script"],
         "evaluation_routes": ["Visible Excel", "Excel COM", "Workbook API"],
-        "steps": 5,
+        "steps": 8,
+        "benchmark_version": BENCHMARK_VERSION,
     },
     "vscode": {
         "title": "VS Code 测试修复",
-        "description": "诊断两个独立缺陷，选择修复顺序和通道，并在每次修改后重跑测试。",
+        "description": "诊断四个独立缺陷，选择修复顺序和通道，并在每次修改后重跑回归测试。",
         "gui_routes": ["PyAutoGUI · VS Code", "Terminal", "Test Verify"],
         "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "hybrid_channels": ["gui", "mcp", "api", "cli"],
         "evaluation_routes": ["Visible VS Code", "MCP", "Filesystem API", "Allowlisted CLI"],
-        "steps": 7,
+        "steps": 10,
+        "benchmark_version": BENCHMARK_VERSION,
     },
     "explorer": {
-        "title": "文件整理",
-        "description": "从混合收件箱中选择两份合格报告、归档并生成清单。",
+        "title": "Explorer 发布流水线",
+        "description": "从混合收件箱筛选五份合格报告，排除敏感材料并生成发布清单与说明。",
         "gui_routes": ["PyAutoGUI · Explorer", "PyAutoGUI · Notepad", "File Verify"],
         "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "hybrid_channels": ["gui", "mcp", "api", "cli"],
         "evaluation_routes": ["Visible Explorer", "MCP", "Filesystem API", "Allowlisted CLI"],
-        "steps": 4,
+        "steps": 8,
+        "benchmark_version": BENCHMARK_VERSION,
     },
 }
 
@@ -122,6 +128,7 @@ class RunManager:
             record = {
                 "id": run_id,
                 "task": task,
+                "benchmark_version": BENCHMARK_VERSION,
                 "policy": policy,
                 "visible_desktop": visible_desktop,
                 "execution_profile": execution_profile,
@@ -218,6 +225,7 @@ class RunManager:
         record = {
             "id": run_id,
             "task": task,
+            "benchmark_version": TASK_CATALOG[task]["benchmark_version"],
             "policy": agent,
             "agent": agent,
             "execution_profile": "external",
@@ -247,6 +255,11 @@ class RunManager:
         groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
         for record in self.list():
             if task and record["task"] != task:
+                continue
+            record_task = record.get("task")
+            if record_task not in TASK_CATALOG:
+                continue
+            if record.get("benchmark_version") != TASK_CATALOG[record_task]["benchmark_version"]:
                 continue
             detail = self.detail(record["id"])
             metrics = detail["metrics"]
