@@ -3,6 +3,7 @@ const escapeHTML = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => 
 const formatMs = (value) => value == null ? "—" : value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${Math.round(value)} ms`;
 const agentLabel = { jev: "Jev", rule: "Rule baseline", codex_computer_use: "Codex Computer Use", jev_with_fallback: "Jev + fallback" };
 let tasks = {};
+let demos = {};
 let selectedTask = "edge";
 
 const caseMeta = {
@@ -23,13 +24,28 @@ function appPreview(meta, routes) {
   return `<div class="case-window ${meta.className}"><div class="window-bar"><span></span><span></span><span></span><b>${meta.app}</b></div><div class="window-content"><div class="window-sidebar"></div><div class="window-canvas"><i></i><i></i><i></i><i></i></div></div><div class="route-overlay">${routes.slice(0, 4).map((route) => `<span>${escapeHTML(route.split(" · ")[0])}</span>`).join("")}<b>JEV ↗</b></div></div>`;
 }
 
+function casePreview(id, meta, routes) {
+  const sources = demos[id] || {};
+  const initial = sources.hybrid || sources.gui_only;
+  if (!initial) return appPreview(meta, routes);
+  return `<div class="case-video"><video controls muted playsinline preload="none" src="${escapeHTML(initial)}" aria-label="${escapeHTML(meta.summary)} 演示视频"></video><div class="video-switch" aria-label="选择演示模式">${sources.hybrid ? `<button data-video="${escapeHTML(sources.hybrid)}" aria-pressed="${initial === sources.hybrid}">Hybrid</button>` : ""}${sources.gui_only ? `<button data-video="${escapeHTML(sources.gui_only)}" aria-pressed="${initial === sources.gui_only}">GUI Only</button>` : ""}</div></div>`;
+}
+
 function renderCases() {
   const entries = Object.entries(tasks);
   $("#avg-steps").textContent = entries.length ? (entries.reduce((sum, [, task]) => sum + task.steps, 0) / entries.length).toFixed(0) : "—";
   $("#case-grid").innerHTML = entries.map(([id, task]) => {
     const meta = caseMeta[id];
-    return `<article class="case-card"><div class="case-preview">${appPreview(meta, task.hybrid_routes || [])}<span class="case-index">${meta.index}</span></div><div class="case-copy"><div class="case-meta"><span>${meta.app}</span><b>${task.steps} STEPS</b></div><h3>${meta.summary}</h3><p>${escapeHTML(task.description)}</p><small>${meta.stages}</small></div></article>`;
+    return `<article class="case-card"><div class="case-preview">${casePreview(id, meta, task.hybrid_routes || [])}<span class="case-index">${meta.index}</span></div><div class="case-copy"><div class="case-meta"><span>${meta.app}</span><b>${task.steps} STEPS</b></div><h3>${meta.summary}</h3><p>${escapeHTML(task.description)}</p><small>${meta.stages}</small></div></article>`;
   }).join("");
+  document.querySelectorAll(".video-switch button").forEach((button) => button.addEventListener("click", () => {
+    const wrapper = button.closest(".case-video");
+    const video = wrapper.querySelector("video");
+    video.pause();
+    video.src = button.dataset.video;
+    video.load();
+    wrapper.querySelectorAll("button").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+  }));
 }
 
 function renderTabs() {
@@ -77,6 +93,7 @@ async function boot() {
   try {
     const bootstrap = await getJSON("/api/bootstrap");
     tasks = bootstrap.tasks || {};
+    demos = bootstrap.demos || {};
     renderCases(); renderTabs(); await renderBenchmark();
   } catch (error) {
     $("#case-grid").innerHTML = `<div class="empty-results"><b>项目数据读取失败</b><span>${escapeHTML(error.message)}</span></div>`;

@@ -156,6 +156,17 @@ class FileOrganizationTask:
     def allowed_roots(self) -> tuple[Path, ...]:
         return (self.workspace,)
 
+    def close(self) -> None:
+        if self._explorer_handle is None:
+            return
+        try:
+            from pywinauto import Desktop
+
+            Desktop(backend="uia").window(handle=self._explorer_handle).close()
+        except Exception:
+            pass
+        self._explorer_handle = None
+
     def executor_bindings(self) -> dict[Channel, object]:
         cli = RegisteredCliExecutor()
         cli.register(

@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from ..config import load_local_env
 from .manager import TASK_CATALOG, RunManager
 
 
@@ -18,6 +19,8 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
     project_root = Path(root or Path.cwd()).resolve()
     manager = RunManager(project_root, data)
     static = Path(__file__).with_name("static")
+    demos = project_root / "artifacts" / "demos"
+    demos.mkdir(parents=True, exist_ok=True)
     token = secrets.token_urlsafe(32)
 
     @asynccontextmanager
@@ -28,6 +31,7 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
     app.state.manager = manager
     app.state.csrf_token = token
     app.mount("/static", StaticFiles(directory=static), name="static")
+    app.mount("/demos", StaticFiles(directory=demos), name="demos")
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -45,7 +49,8 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; "
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self'; media-src 'self'; "
             "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         )
         return response
@@ -56,12 +61,21 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
 
     @app.get("/api/bootstrap")
     def bootstrap():
+        demo_files = {
+            task: {
+                label: f"/demos/{task}-{suffix}.mp4"
+                for label, suffix in (("hybrid", "hybrid"), ("gui_only", "gui-only"))
+                if (demos / f"{task}-{suffix}.mp4").is_file()
+            }
+            for task in TASK_CATALOG
+        }
         return {
             "csrf": token,
             "tasks": TASK_CATALOG,
             "active_id": manager.active_id,
             "jev_configured": bool(os.getenv("TYPESAFE_API_KEY")),
             "platform": os.name,
+            "demos": demo_files,
         }
 
     @app.get("/api/runs")
@@ -107,6 +121,7 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
 
 
 def main() -> None:
+    load_local_env()
     parser = argparse.ArgumentParser(description="CUA-JEV local experiment console")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8768)

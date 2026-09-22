@@ -1509,6 +1509,17 @@ class VSCodeTerminalTask:
             check=False,
         )
 
+    def close(self) -> None:
+        if self._vscode_handle is None:
+            return
+        try:
+            from pywinauto import Desktop
+
+            Desktop(backend="uia").window(handle=self._vscode_handle).close()
+        except Exception:
+            pass
+        self._vscode_handle = None
+
     def observe(self, history: Sequence[StepResult]) -> Observation:
         source = self.source.read_text(encoding="utf-8")
         test = self.last_test or {"returncode": None, "stdout": "", "stderr": "not run"}

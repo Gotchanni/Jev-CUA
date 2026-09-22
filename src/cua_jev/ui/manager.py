@@ -119,7 +119,11 @@ class RunManager:
             if execution_profile not in {"hybrid", "visible", "adaptive"}:
                 raise ValueError("无效的执行配置")
             argv.extend(("--profile", execution_profile))
-            if policy == "jev" and execution_profile in {"visible", "adaptive"}:
+            if (
+                policy == "jev"
+                and execution_profile in {"visible", "adaptive"}
+                and bool(spec.get("policy_fallback"))
+            ):
                 argv.append("--policy-fallback")
             if visible_desktop:
                 argv.append("--headed-edge")

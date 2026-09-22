@@ -207,6 +207,22 @@ cua-jev suite --task all --policy jev
 cua-jev suite --task all --policy jev --profile visible --headed-edge --open-vscode --visible-apps
 ```
 
+For repeatable v2 paired experiments and publishable screen recordings, keep the key in the ignored local
+`.env`, install the recording extra, and run the recorder. It executes the same Jev policy once against
+`Hybrid Action Space` and once against `GUI Only` for every suite, writes benchmark-compatible records under
+`runs/ui/`, and saves H.264 videos with a live route HUD under `artifacts/demos/`:
+
+```powershell
+Copy-Item .env.example .env
+# Edit .env and set TYPESAFE_API_KEY locally; it is ignored by Git.
+python -m pip install -e ".[all,ui,recording]"
+python scripts/record_v2_demos.py --task all --profile both --policy jev
+```
+
+Use `--samples 3` to collect three paired samples while recording only the first run of each condition. The
+showcase automatically exposes available `Hybrid` and `GUI Only` videos on the corresponding case card.
+Recordings do not autoplay, and all measurements still come from the JSONL trace rather than video duration.
+
 Validate only the API decision path, or repeat the frozen task for reliability measurements:
 
 ```powershell

@@ -6,6 +6,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from .config import load_local_env
 from .demo import filesystem_routing_demo
 from .doctor import doctor
 from .episode import EpisodeConfig, EpisodeRunner
@@ -104,6 +105,7 @@ def _suite_runner(policy_name: str, trace: Path, *, policy_fallback: bool = Fals
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_local_env()
     args = _parser().parse_args(argv)
     if args.command == "doctor":
         print(json.dumps(doctor(), indent=2, ensure_ascii=False))

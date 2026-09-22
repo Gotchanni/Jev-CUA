@@ -67,8 +67,15 @@ def test_external_codex_baseline_uses_shared_benchmark_contract(tmp_path: Path) 
 
 
 def test_console_serves_brand_assets(tmp_path: Path) -> None:
+    demos = tmp_path / "artifacts" / "demos"
+    demos.mkdir(parents=True)
+    (demos / "edge-hybrid.mp4").write_bytes(b"demo")
     with TestClient(create_app(root=tmp_path, data=tmp_path / "runs")) as client:
         page = client.get("/")
         assert page.status_code == 200
         assert "ZJU REAL Lab" in page.text
         assert client.get("/static/logo-mark.svg").status_code == 200
+        assert client.get("/api/bootstrap").json()["demos"]["edge"] == {
+            "hybrid": "/demos/edge-hybrid.mp4"
+        }
+        assert client.get("/demos/edge-hybrid.mp4").content == b"demo"
