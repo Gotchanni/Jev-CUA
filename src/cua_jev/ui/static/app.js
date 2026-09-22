@@ -119,7 +119,9 @@ function benchmarkRow(row, maxDuration) {
   const label = `${agentLabel[row.agent] || row.agent} · ${mode}`;
   const actions = row.mean_actions == null ? "—" : row.mean_actions.toFixed(1);
   const sampleLabel = row.agent === "codex_computer_use" && row.samples === 1 ? "1 pilot run" : `${row.successful_samples}/${row.samples} runs`;
-  return `<div class="result-row"><div class="result-name"><b>${escapeHTML(label)}</b></div><div class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></div><div class="result-meta">${sampleLabel} · ${actions} actions</div></div>`;
+  const usd = row.agent === "codex_computer_use" ? row.median_reference_cost_usd : row.median_model_cost_usd;
+  const cost = usd == null ? "—" : `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3)}`;
+  return `<div class="result-row"><div class="result-name"><b>${escapeHTML(label)}</b></div><div class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></div><div class="result-cost" aria-label="Estimated model cost"><strong>${cost}</strong></div><div class="result-meta">${sampleLabel} · ${actions} actions</div></div>`;
 }
 
 function pairedRows(rows) {

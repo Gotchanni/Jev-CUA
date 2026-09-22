@@ -117,6 +117,15 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
         except ValueError as exc:
             raise HTTPException(400, detail=str(exc)) from exc
 
+    @app.post("/api/baselines/{run_id}/usage")
+    async def attach_baseline_usage(run_id: str, request: Request):
+        try:
+            return manager.attach_baseline_usage(run_id, await request.json())
+        except KeyError as exc:
+            raise HTTPException(404, detail="run not found") from exc
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
+
     return app
 
 

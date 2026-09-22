@@ -156,12 +156,26 @@ These are the first four **single-run** Codex Hybrid measurements against the fr
 column is the median of existing successful Hybrid runs, not a matched same-day trial. Every listed run
 passed the task's terminal evaluator.
 
-| Task | Jev Hybrid median | Jev runs | Codex Hybrid wall time | Codex runs |
-|---|---:|---:|---:|---:|
-| Edge | 79.5 s | 2/2 | 77.4 s | 1/1 |
-| Excel | 84.2 s | 3/3 | 39.2 s | 1/1 |
-| VS Code | 14.0 s | 2/2 | 57.9 s | 1/1 |
-| Explorer | 13.2 s | 4/4 | 50.9 s | 1/1 |
+| Task | Jev Hybrid median | Jev model USD | Jev runs | Codex Hybrid wall time | Codex reference USD | Codex runs |
+|---|---:|---:|---:|---:|---:|---:|
+| Edge | 79.5 s | $0.00072 | 2/2 | 77.4 s | ~$0.257 | 1/1 |
+| Excel | 84.2 s | $0.00143 | 3/3 | 39.2 s | ~$0.071 | 1/1 |
+| VS Code | 14.0 s | $0.00362 | 2/2 | 57.9 s | ~$0.098 | 1/1 |
+| Explorer | 13.2 s | $0.00492 | 4/4 | 50.9 s | ~$0.106 | 1/1 |
+
+Jev USD is calculated from each successful trace's API-reported input tokens at the [published Jev 1.13
+rate](https://docs.typesafe.ai/models) of $0.042 per million; output is free. Codex USD is **a reference
+estimate, not an observed bill**: local `token_count` events for the four pilot windows are converted with
+OpenAI's [GPT-6 Sol Enterprise token-based USD rate card](https://help.openai.com/en/articles/20001415-chatgpt-rate-card-enterprise-token-based-pricing)
+($2/$0.20/$10 per million uncached input/cached input/output tokens at Standard speed). The corresponding
+[credit rates](https://learn.chatgpt.com/docs/pricing) are retained in the benchmark API, not foregrounded
+on the website. Actual costs vary by account, region, plan, agreement and speed mode; included
+subscription usage is not an incremental charge. The
+Codex pilot ran inside an existing long conversation, so its large, mostly cached context should not be
+interpreted as a fresh-task cost. The website foregrounds USD for readability; the benchmark API also
+exposes token counts, credits and sample coverage. These are model-inference estimates, excluding other
+infrastructure costs and any unreported failed Jev requests.
+The [published pilot counters](benchmarks/v2-cost-pilot-2026-09-23.json) make the USD calculation reproducible.
 
 Codex used a generic Playwright browser adapter for Edge, generic COM operations for Excel, and CLI/file
 tools for VS Code and Explorer. Its clock includes fixture setup, model/tool interaction and terminal

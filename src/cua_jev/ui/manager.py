@@ -12,9 +12,23 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
+from ..cost import (
+    CODEX_MODEL,
+    JEV_MODEL,
+    codex_reference_usd,
+    codex_standard_credits,
+    jev_model_usd,
+    token_count,
+)
 from ..suites import SUITE_NAMES
 
 BENCHMARK_VERSION = "long-horizon-v2"
+
+
+def _median_present(samples: list[dict[str, Any]], key: str) -> float | None:
+    values = [item[key] for item in samples if item.get(key) is not None]
+    return median(values) if values else None
+
 
 TASK_CATALOG = {
     "edge": {
@@ -267,6 +281,28 @@ class RunManager:
         self._save(record)
         return self.detail(run_id)
 
+    def attach_baseline_usage(self, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+        """Attach measured local token counters to an existing external pilot."""
+        with self._lock:
+            record = self._load(run_id)
+            if record.get("execution_profile") != "external" or record.get("agent") != "codex_computer_use":
+                raise ValueError("Token usage can only be attached to a Codex baseline")
+            model = spec.get("model")
+            if model != CODEX_MODEL:
+                raise ValueError(f"This credit conversion supports only {CODEX_MODEL}")
+            usage = {
+                name: token_count(spec.get(name), name)
+                for name in ("input_tokens", "cached_input_tokens", "output_tokens")
+            }
+            if usage["cached_input_tokens"] > usage["input_tokens"]:
+                raise ValueError("cached_input_tokens cannot exceed input_tokens")
+            source = spec.get("source")
+            if source != "local_session_token_count":
+                raise ValueError("source must identify local_session_token_count")
+            record["external_metrics"].update(model=model, token_source=source, **usage)
+            self._save(record)
+        return self.detail(run_id)
+
     def benchmarks(self, task: str | None = None) -> dict[str, Any]:
         if task is not None and task not in SUITE_NAMES:
             raise ValueError("Invalid benchmark task")
@@ -316,13 +352,22 @@ class RunManager:
                     "mean_route_diversity": (
                         mean(item["route_diversity"] for item in successful) if successful else None
                     ),
+                    "median_input_tokens": _median_present(successful, "input_tokens"),
+                    "median_cached_input_tokens": _median_present(successful, "cached_input_tokens"),
+                    "median_output_tokens": _median_present(successful, "output_tokens"),
+                    "median_model_cost_usd": _median_present(successful, "model_cost_usd"),
+                    "median_reference_cost_usd": _median_present(successful, "reference_cost_usd"),
+                    "median_standard_credits": _median_present(successful, "standard_credits"),
+                    "token_samples": sum(item.get("input_tokens") is not None for item in successful),
+                    "cost_samples": sum(
+                        item.get("model_cost_usd") is not None or item.get("standard_credits") is not None
+                        for item in successful
+                    ),
                 }
             )
         return {"task": task, "rows": rows}
 
-    def _events(
-        self, record: dict[str, Any], *, limit: int | None = 100
-    ) -> list[dict[str, Any]]:
+    def _events(self, record: dict[str, Any], *, limit: int | None = 100) -> list[dict[str, Any]]:
         if record.get("execution_profile") == "external":
             return []
         base = Path(record["trace_base"])
@@ -347,8 +392,23 @@ class RunManager:
             external = record["external_metrics"]
             channels = external["channels"]
             actions = external["actions"]
+            credits = None
+            reference_cost = None
+            if external.get("model") == CODEX_MODEL and all(
+                external.get(key) is not None
+                for key in ("input_tokens", "cached_input_tokens", "output_tokens")
+            ):
+                credits = codex_standard_credits(
+                    external["input_tokens"], external["cached_input_tokens"], external["output_tokens"]
+                )
+                reference_cost = codex_reference_usd(
+                    external["input_tokens"], external["cached_input_tokens"], external["output_tokens"]
+                )
             return {
                 **external,
+                "standard_credits": credits,
+                "model_cost_usd": None,
+                "reference_cost_usd": reference_cost,
                 "action_space": record["action_space"],
                 "gui_ratio": channels.get("gui", 0) / actions if actions else 0.0,
                 "route_diversity": len([name for name, count in channels.items() if count]),
@@ -370,6 +430,17 @@ class RunManager:
         fallback_count = sum(
             1 for event in events if event["kind"] == "policy_exchange" and event["payload"].get("fallback")
         )
+        exchanges = [event["payload"] for event in events if event["kind"] == "policy_exchange"]
+        priced = bool(exchanges) and all(
+            item.get("response", {}).get("model") == JEV_MODEL
+            and type(item.get("usage", {}).get("input_tokens")) is int
+            and item["usage"]["input_tokens"] >= 0
+            and type(item.get("usage", {}).get("output_tokens")) is int
+            and item["usage"]["output_tokens"] >= 0
+            for item in exchanges
+        )
+        input_tokens = sum(item["usage"]["input_tokens"] for item in exchanges) if priced else None
+        output_tokens = sum(item["usage"]["output_tokens"] for item in exchanges) if priced else None
         wall_time = sum(float(item.get("duration_ms", 0)) for item in episodes) if episodes else None
         success = bool(episodes) and all(item.get("status") == "success" for item in episodes)
         actions = len(receipts)
@@ -392,6 +463,12 @@ class RunManager:
             "route_switches": sum(a != b for a, b in zip(sequence, sequence[1:], strict=False)),
             "fallback_count": fallback_count,
             "action_space": action_space,
+            "input_tokens": input_tokens,
+            "cached_input_tokens": None,
+            "output_tokens": output_tokens,
+            "model_cost_usd": jev_model_usd(input_tokens) if input_tokens is not None else None,
+            "reference_cost_usd": None,
+            "standard_credits": None,
         }
 
     @staticmethod

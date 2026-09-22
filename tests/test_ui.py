@@ -64,8 +64,72 @@ def test_external_codex_baseline_uses_shared_benchmark_contract(tmp_path: Path) 
                 "mean_actions": 8,
                 "mean_gui_ratio": 1.0,
                 "mean_route_diversity": 1,
+                "median_input_tokens": None,
+                "median_cached_input_tokens": None,
+                "median_output_tokens": None,
+                "median_model_cost_usd": None,
+                "median_reference_cost_usd": None,
+                "median_standard_credits": None,
+                "token_samples": 0,
+                "cost_samples": 0,
             }
         ]
+
+
+def test_codex_baseline_token_cost_uses_official_enterprise_reference(tmp_path: Path) -> None:
+    with TestClient(create_app(root=tmp_path, data=tmp_path / "runs")) as client:
+        csrf = client.get("/api/bootstrap").json()["csrf"]
+        headers = {"X-CUA-JEV-CSRF": csrf}
+        run = client.post(
+            "/api/baselines",
+            headers=headers,
+            json={
+                "agent": "codex_computer_use",
+                "task": "edge",
+                "action_space": "hybrid",
+                "success": True,
+                "duration_ms": 1000,
+                "actions": 1,
+                "channels": {"script": 1},
+            },
+        ).json()
+        path = f"/api/baselines/{run['id']}/usage"
+        usage = {
+            "model": "gpt-6-sol",
+            "source": "local_session_token_count",
+            "input_tokens": 1_000_000,
+            "cached_input_tokens": 900_000,
+            "output_tokens": 10_000,
+        }
+        assert client.post(path, json=usage).status_code == 403
+        invalid = {**usage, "cached_input_tokens": 1_000_001}
+        assert client.post(path, headers=headers, json=invalid).status_code == 400
+        updated = client.post(path, headers=headers, json=usage)
+        assert updated.status_code == 200
+        assert updated.json()["metrics"]["standard_credits"] == pytest.approx(12.0)
+        assert updated.json()["metrics"]["reference_cost_usd"] == pytest.approx(0.48)
+        row = client.get("/api/benchmarks?task=edge").json()["rows"][0]
+        assert row["median_input_tokens"] == 1_000_000
+        assert row["median_reference_cost_usd"] == pytest.approx(0.48)
+        assert row["cost_samples"] == 1
+
+
+def test_jev_trace_usage_yields_api_cost_and_rejects_partial_usage(tmp_path: Path) -> None:
+    manager = RunManager(tmp_path, tmp_path / "runs")
+    events = [
+        {
+            "kind": "policy_exchange",
+            "payload": {
+                "response": {"model": "jev-1.13.0"},
+                "usage": {"input_tokens": 20_000, "output_tokens": 100},
+            },
+        }
+    ]
+    metrics = manager._metrics({"events": events, "execution_profile": "adaptive"})
+    assert metrics["input_tokens"] == 20_000
+    assert metrics["model_cost_usd"] == pytest.approx(0.00084)
+    events.append({"kind": "policy_exchange", "payload": {"response": {"model": "jev-1.13.0"}}})
+    assert manager._metrics({"events": events, "execution_profile": "adaptive"})["model_cost_usd"] is None
 
 
 def test_console_serves_brand_assets(tmp_path: Path) -> None:
@@ -92,9 +156,7 @@ def test_console_serves_brand_assets(tmp_path: Path) -> None:
         for app in ("edge", "excel", "vscode", "explorer"):
             assert client.get(f"/static/icons/{app}.svg").status_code == 200
         assert client.get("/static/qiushi-eagle.svg").status_code == 404
-        assert client.get("/api/bootstrap").json()["demos"]["edge"] == {
-            "hybrid": "/demos/edge-hybrid.mp4"
-        }
+        assert client.get("/api/bootstrap").json()["demos"]["edge"] == {"hybrid": "/demos/edge-hybrid.mp4"}
         assert client.get("/demos/edge-hybrid.mp4").content == b"demo"
 
 
@@ -109,8 +171,7 @@ def test_metrics_use_full_trace_while_detail_is_bounded(tmp_path: Path) -> None:
         for index in range(115)
     ]
     events.extend(
-        {"timestamp": 200 + index, "kind": "decision", "payload": {"latency_ms": 1}}
-        for index in range(115)
+        {"timestamp": 200 + index, "kind": "decision", "payload": {"latency_ms": 1}} for index in range(115)
     )
     events.append(
         {
