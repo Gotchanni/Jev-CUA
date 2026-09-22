@@ -12,7 +12,7 @@
   <header class="site-header">
     <a class="brand" href="#top" aria-label="CUA-JEV home">
       <img src="/static/logo-mark.svg" width="38" height="38" alt="REAL Lab logo">
-      <span><strong>CUA-JEV</strong><small>REAL LAB</small></span>
+      <strong>CUA-JEV</strong>
     </a>
     <nav aria-label="Primary navigation">
       <a href="#framework">Framework</a>
@@ -36,14 +36,19 @@
       </div>
 
       <div class="decision-card" aria-label="Jev hybrid action selection example">
-        <header><div><span>Jev decision</span><strong>Repair the failing test</strong></div><b>43 ms</b></header>
-        <div class="decision-list">
-          <div class="selected"><i>MCP</i><span>filesystem.write_text</span><b>61%</b></div>
-          <div><i>CLI</i><span>replace-exact</span><b>24%</b></div>
-          <div><i>GUI</i><span>VS Code edit</span><b>10%</b></div>
-          <div><i>API</i><span>typed file write</span><b>5%</b></div>
+        <header><div><span>ONE DECISION · HYBRID ACTION SPACE</span><strong>How Jev chooses the next action</strong></div><b>43 ms</b></header>
+        <div class="decision-body">
+          <div class="decision-context"><span>Current subgoal</span><strong>Repair the failing test</strong></div>
+          <div class="action-space" aria-label="Available action spaces">
+            <span>GUI</span><span>DOM</span><span>COM</span><span>CLI</span><span>MCP</span><span>API</span>
+          </div>
+          <div class="decision-output">
+            <span class="jev-node">Jev</span>
+            <span class="decision-arrow" aria-hidden="true">→</span>
+            <div><small>Selected action</small><strong>MCP · filesystem.write_text</strong><p>Typed, guarded, and independently verifiable.</p></div>
+          </div>
         </div>
-        <footer><span>Selected: MCP</span><span>Guard passed</span><span>Verified</span></footer>
+        <footer><span>Typed candidates</span><i aria-hidden="true">→</i><span>One committed action</span><i aria-hidden="true">→</i><span>Verified result</span></footer>
       </div>
     </section>
 
@@ -61,14 +66,20 @@
         <p>Applications expose structured state, legal typed actions, and a terminal verifier. Jev selects the intent and execution channel; the runtime guards, executes, and verifies it.</p>
       </header>
 
-      <div class="loop-flow" aria-label="CUA-JEV execution loop">
-        <article><span>01</span><h3>Observe</h3><p>Read structured application state.</p></article>
-        <i aria-hidden="true">→</i>
-        <article class="route-step"><span>02</span><h3>Route with Jev</h3><p>Select intent × action channel.</p></article>
-        <i aria-hidden="true">→</i>
-        <article><span>03</span><h3>Execute</h3><p>Guard and invoke the real tool.</p></article>
-        <i aria-hidden="true">→</i>
-        <article><span>04</span><h3>Verify</h3><p>Check the resulting state independently.</p></article>
+      <div class="loop-shell">
+        <div class="loop-tabs" role="tablist" aria-label="CUA-JEV execution loop">
+          <button role="tab" aria-selected="true" aria-controls="loop-detail" data-loop-step="observe"><span>01</span><strong>Observe</strong><small>Frame for Jev</small></button>
+          <button role="tab" aria-selected="false" aria-controls="loop-detail" data-loop-step="select"><span>02</span><strong>Select</strong><small>Jev decides</small></button>
+          <button role="tab" aria-selected="false" aria-controls="loop-detail" data-loop-step="execute"><span>03</span><strong>Execute</strong><small>Commit the choice</small></button>
+          <button role="tab" aria-selected="false" aria-controls="loop-detail" data-loop-step="verify"><span>04</span><strong>Verify</strong><small>Return evidence</small></button>
+        </div>
+        <article class="loop-detail" id="loop-detail" role="tabpanel" tabindex="0">
+          <div><span id="loop-kicker">01 · OBSERVE</span><h3 id="loop-title">Frame a typed decision</h3><p id="loop-summary">The application adapter turns live Windows state into a compact, structured context Jev can reason over.</p></div>
+          <dl>
+            <div><dt>Jev’s role</dt><dd id="loop-jev">Receives the current subgoal, structured state, and only the legal actions available now.</dd></div>
+            <div><dt>Runtime’s role</dt><dd id="loop-runtime">Reads DOM, UI Automation, COM, terminal, filesystem, or MCP state through the capability pack.</dd></div>
+          </dl>
+        </article>
       </div>
 
       <div class="contribution-grid">
@@ -85,8 +96,8 @@
 
     <section class="section cases-section" id="cases">
       <header class="section-head split-head">
-        <div><p class="eyebrow">VERIFIED CASES</p><h2>Four long-horizon Windows workflows.</h2></div>
-        <p>Paired Jev · Hybrid and Jev · GUI Only runs start from the same task and use the same terminal verifier.</p>
+        <div><p class="eyebrow">VERIFIED CASES</p><h2>Four common Windows workflows.</h2></div>
+        <p>Paired Hybrid and GUI Only runs start from the same task and use the same terminal verifier.</p>
       </header>
       <div id="case-grid" class="case-grid" aria-live="polite"></div>
     </section>

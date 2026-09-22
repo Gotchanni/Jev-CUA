@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title>Microsoft Edge</title>
+  <defs><linearGradient id="g" x1="7" y1="7" x2="41" y2="41"><stop stop-color="#16a6d8"/><stop offset="1" stop-color="#1374c4"/></linearGradient></defs>
+  <circle cx="24" cy="24" r="21" fill="url(#g)"/>
+  <path d="M39 27c-1 9-8 15-17 15-9 0-16-6-16-15 0-7 5-13 12-15-4 4-5 8-3 11 2-6 8-9 14-8 6 1 10 6 10 12Z" fill="#fff" opacity=".94"/>
+  <path d="M15 27c2 5 7 7 12 7 4 0 7-1 10-4-2 7-8 12-15 12-8 0-14-5-16-12 2-2 5-3 9-3Z" fill="#42c6a5"/>
+</svg>
