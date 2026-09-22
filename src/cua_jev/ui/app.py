@@ -68,6 +68,13 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
     def list_runs():
         return manager.list()
 
+    @app.get("/api/benchmarks")
+    def benchmarks(task: str | None = None):
+        try:
+            return manager.benchmarks(task)
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
+
     @app.post("/api/runs")
     async def create_run(request: Request):
         try:
@@ -86,6 +93,13 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
     def stop_run(run_id: str):
         try:
             return manager.stop(run_id)
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
+
+    @app.post("/api/baselines")
+    async def import_baseline(request: Request):
+        try:
+            return manager.import_baseline(await request.json())
         except ValueError as exc:
             raise HTTPException(400, detail=str(exc)) from exc
 

@@ -8,7 +8,7 @@ agent while preserving safety and task success?
 
 The first prototype deliberately uses **no VLM**. It combines structured observations from Edge DOM,
 Windows UI Automation, Excel COM, VS Code/terminal text, filesystem APIs and MCP-shaped tools. In the
-recordable demo profile, PyAutoGUI emits the real mouse and keyboard input while those structured interfaces
+GUI-only profile, PyAutoGUI emits the real mouse and keyboard input while those structured interfaces
 only observe, locate and verify state. Jev does not generate shell commands or scripts. It chooses one
 complete, typed action candidate; a deterministic guard validates it, a channel executor runs it, and an
 independent verifier checks the result.
@@ -83,21 +83,40 @@ $env:TYPESAFE_API_KEY = "your-key"  # omit when using the Rule baseline
 cua-jev-ui
 ```
 
-Open `http://127.0.0.1:8768`. **Adaptive Demo** is the default system demonstration: real applications stay
-visible while Jev chooses both the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API
-route. **Physical Demo** is the recordable GUI-only ablation: every mutation is performed visibly through
-PyAutoGUI. **Route Evaluation** uses deterministic fixtures and makes both Jev and the Rule baseline
-available for controlled comparisons. Historical runs are labelled `REPLAY` and load only when selected.
+Open `http://127.0.0.1:8768`. **Hybrid Action Space** keeps real applications visible while the selected
+decision policy chooses both the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API
+route. **GUI Only** is the recordable action-space ablation: every mutation is performed visibly through
+PyAutoGUI. Jev and the deterministic Rule baseline can run against either action space, so policy and action
+space are not conflated. Historical runs load into the interactive Trace Explorer only when selected.
 
-Demo profiles use a bounded, explicitly traced Rule fallback when a transient Jev transport outage persists
-after retries. The timeline labels this `Policy Fallback`; strict evaluation runs fail instead of falling back,
-so API reliability measurements are not hidden.
+Interactive Hybrid and GUI-only runs use a bounded, explicitly traced Rule fallback when a transient Jev
+transport outage persists after retries. Benchmark aggregation labels these runs `Jev + fallback` instead of
+mixing them into pure Jev samples, so API reliability problems are not hidden.
 
-The console shows the complete closed loop: structured observation, the currently legal intent-and-route
-candidates, Jev probabilities, commitment, Guard approval, executor receipt and independent verification.
+The console shows the complete evidence chain: structured observation, the currently legal intent-and-route
+candidates, Jev probabilities, Guard approval, executor receipt and independent verification. The status
+strip labels the implementation pipeline `Observe → Route → Guard → Execute → Verify`; this is a CUA-JEV
+logging abstraction, not an official Jev protocol. The Benchmark Matrix aggregates only measured local runs
+and reports success rate, end-to-end time, decision time, execution time, action count, GUI share and route
+diversity. Fallback runs remain a separate cohort.
 Run history stays under `runs/ui/`; the key is inherited from the server environment and is never entered in
 or stored by the page. The console binds to localhost because its job is to operate local Windows
 applications, not to act as a hosted control plane.
+
+Codex Computer Use is treated as an external non-Jev runner, not relabelled Rule behavior. After Codex runs
+the same task and passes the same terminal verifier, import its measured result through the local-only
+baseline contract. Missing values stay unavailable rather than being estimated:
+
+```powershell
+$bootstrap = Invoke-RestMethod http://127.0.0.1:8768/api/bootstrap
+$body = @{
+  agent = "codex_computer_use"; task = "edge"; action_space = "gui_only"
+  success = $true; duration_ms = 42000; actions = 8
+  channels = @{ gui = 8 }; verifier = "shared_terminal_verifier"
+} | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8768/api/baselines -Method Post `
+  -Headers @{ "X-CUA-JEV-CSRF" = $bootstrap.csrf } -ContentType "application/json" -Body $body
+```
 
 Run the no-key deterministic demo:
 
@@ -122,10 +141,10 @@ The complete suite command runs four multi-step, independently verified workflow
 
 | Workflow | Required state transitions | Competing real routes |
 |---|---|---|
-| Edge public shopping | navigate to SauceDemo, sign in, sort low-to-high, add the requested product, open cart | physical Edge input in demo; DOM/script/API routes in evaluation |
-| Excel sales review | compute total, compute average, mark reviewed, create chart | physical Excel input in demo; COM and workbook API in evaluation |
-| VS Code diagnosis | run failing tests, repair either independent defect, rerun, repair the other, prove green | physical editor/terminal input in demo; MCP, filesystem API and CLI in evaluation |
-| Explorer publishing | distinguish final Q3 files from draft/prior-quarter distractors, archive both, write exact manifest | physical Explorer/Notepad input in demo; MCP, filesystem API and CLI in evaluation |
+| Edge public shopping | navigate to SauceDemo, sign in, sort low-to-high, add the requested product, open cart | PyAutoGUI in GUI Only; PyAutoGUI and live DOM in Hybrid |
+| Excel sales review | compute total, compute average, mark reviewed, create chart | PyAutoGUI in GUI Only; PyAutoGUI and live COM in Hybrid |
+| VS Code diagnosis | run failing tests, repair either independent defect, rerun, repair the other, prove green | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
+| Explorer publishing | distinguish final Q3 files from draft/prior-quarter distractors, archive both, write exact manifest | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
 
 These are not four fixed action scripts. At each state, the task builder offers every currently legal
 **intent × execution route** pair. For example, the initial Excel state can expose twelve candidates across
@@ -151,7 +170,7 @@ cua-jev suite --task all --policy jev --profile adaptive --policy-fallback `
   --headed-edge --open-vscode --visible-apps
 ```
 
-The Edge physical demo deliberately targets the public `https://www.saucedemo.com/` site. The bundled HTML
+The Edge GUI-only run deliberately targets the public `https://www.saucedemo.com/` site. The bundled HTML
 page remains only as a deterministic regression fixture for the hybrid evaluation profile; it is not used
 by the public demo.
 

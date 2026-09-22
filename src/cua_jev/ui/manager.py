@@ -7,7 +7,9 @@ import sys
 import threading
 import time
 import uuid
+from collections import Counter, defaultdict
 from pathlib import Path
+from statistics import mean, median
 from typing import Any
 
 from ..suites import SUITE_NAMES
@@ -16,32 +18,36 @@ TASK_CATALOG = {
     "edge": {
         "title": "Edge 公开站点购物",
         "description": "打开 SauceDemo，登录、排序、加入购物车并核验真实页面状态。",
-        "demo_routes": ["PyAutoGUI · Edge", "DOM Observe", "DOM Verify"],
-        "adaptive_routes": ["PyAutoGUI · Edge", "Playwright DOM", "DOM Verify"],
+        "gui_routes": ["PyAutoGUI · Edge", "DOM Observe", "DOM Verify"],
+        "hybrid_routes": ["PyAutoGUI · Edge", "Playwright DOM", "DOM Verify"],
+        "hybrid_channels": ["gui", "script"],
         "evaluation_routes": ["Visible Edge", "DOM Script", "Page API"],
         "steps": 8,
     },
     "excel": {
         "title": "Excel 销售汇总",
         "description": "完成总计、均值、复核状态和图表，再由独立 COM 会话验证。",
-        "demo_routes": ["PyAutoGUI · Excel", "COM Observe", "COM Verify"],
-        "adaptive_routes": ["PyAutoGUI · Excel", "Live Excel COM", "COM Verify"],
+        "gui_routes": ["PyAutoGUI · Excel", "COM Observe", "COM Verify"],
+        "hybrid_routes": ["PyAutoGUI · Excel", "Live Excel COM", "COM Verify"],
+        "hybrid_channels": ["gui", "script"],
         "evaluation_routes": ["Visible Excel", "Excel COM", "Workbook API"],
         "steps": 5,
     },
     "vscode": {
         "title": "VS Code 测试修复",
         "description": "诊断两个独立缺陷，选择修复顺序和通道，并在每次修改后重跑测试。",
-        "demo_routes": ["PyAutoGUI · VS Code", "Terminal", "Test Verify"],
-        "adaptive_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
+        "gui_routes": ["PyAutoGUI · VS Code", "Terminal", "Test Verify"],
+        "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
+        "hybrid_channels": ["gui", "mcp", "api", "cli"],
         "evaluation_routes": ["Visible VS Code", "MCP", "Filesystem API", "Allowlisted CLI"],
         "steps": 7,
     },
     "explorer": {
         "title": "文件整理",
         "description": "从混合收件箱中选择两份合格报告、归档并生成清单。",
-        "demo_routes": ["PyAutoGUI · Explorer", "PyAutoGUI · Notepad", "File Verify"],
-        "adaptive_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
+        "gui_routes": ["PyAutoGUI · Explorer", "PyAutoGUI · Notepad", "File Verify"],
+        "hybrid_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
+        "hybrid_channels": ["gui", "mcp", "api", "cli"],
         "evaluation_routes": ["Visible Explorer", "MCP", "Filesystem API", "Allowlisted CLI"],
         "steps": 4,
     },
@@ -167,16 +173,125 @@ class RunManager:
     def detail(self, run_id: str) -> dict[str, Any]:
         self._refresh_active()
         record = self._load(run_id)
-        summary_path = Path(record["summary_path"])
-        record["summary"] = self._read_json(summary_path) if summary_path.is_file() else None
-        log_path = Path(record["log_path"])
+        summary_path = Path(record["summary_path"]) if record.get("summary_path") else None
+        record["summary"] = (
+            self._read_json(summary_path) if summary_path is not None and summary_path.is_file() else None
+        )
+        log_path = Path(record["log_path"]) if record.get("log_path") else None
         record["log"] = (
-            log_path.read_text(encoding="utf-8", errors="replace")[-20_000:] if log_path.is_file() else ""
+            log_path.read_text(encoding="utf-8", errors="replace")[-20_000:]
+            if log_path is not None and log_path.is_file()
+            else ""
         )
         record["events"] = self._events(record)
+        record["metrics"] = self._metrics(record)
         return record
 
+    def import_baseline(self, spec: dict[str, Any]) -> dict[str, Any]:
+        """Import a measured external-agent result without inventing unavailable timings."""
+        task = str(spec.get("task", ""))
+        agent = str(spec.get("agent", ""))
+        action_space = str(spec.get("action_space", ""))
+        if task not in SUITE_NAMES:
+            raise ValueError("无效的 baseline 任务")
+        if agent != "codex_computer_use":
+            raise ValueError("目前只接受 codex_computer_use baseline")
+        if action_space not in {"hybrid", "gui_only"}:
+            raise ValueError("action_space 必须是 hybrid 或 gui_only")
+        try:
+            duration_ms = float(spec["duration_ms"])
+            actions = int(spec["actions"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("baseline 需要有效的 duration_ms 和 actions") from exc
+        if duration_ms <= 0 or actions < 0:
+            raise ValueError("baseline 指标必须为非负值，duration_ms 必须大于零")
+        success = spec.get("success")
+        if not isinstance(success, bool):
+            raise ValueError("baseline success 必须是布尔值")
+        channels = spec.get("channels", {"gui": actions})
+        if not isinstance(channels, dict) or any(
+            not isinstance(key, str) or not isinstance(value, int) or value < 0
+            for key, value in channels.items()
+        ):
+            raise ValueError("baseline channels 必须是非负整数映射")
+        run_id = f"external-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+        record = {
+            "id": run_id,
+            "task": task,
+            "policy": agent,
+            "agent": agent,
+            "execution_profile": "external",
+            "action_space": action_space,
+            "status": "completed",
+            "created_at": float(spec.get("created_at", time.time())),
+            "updated_at": time.time(),
+            "external_metrics": {
+                "success": success,
+                "wall_time_ms": duration_ms,
+                "actions": actions,
+                "decision_time_ms": self._optional_nonnegative(spec.get("decision_time_ms")),
+                "execution_time_ms": self._optional_nonnegative(spec.get("execution_time_ms")),
+                "channels": channels,
+                "verifier": str(spec.get("verifier", "shared_terminal_verifier")),
+                "evidence": str(spec.get("evidence", "")),
+            },
+        }
+        run_dir = self.data / run_id
+        run_dir.mkdir(parents=True)
+        self._save(record)
+        return self.detail(run_id)
+
+    def benchmarks(self, task: str | None = None) -> dict[str, Any]:
+        if task is not None and task not in SUITE_NAMES:
+            raise ValueError("无效的 benchmark 任务")
+        groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        for record in self.list():
+            if task and record["task"] != task:
+                continue
+            detail = self.detail(record["id"])
+            metrics = detail["metrics"]
+            if detail["status"] not in {"completed", "failed"} or metrics["wall_time_ms"] is None:
+                continue
+            if metrics["action_space"] == "legacy_evaluation":
+                continue
+            # A fallback run is useful evidence, but is not a pure Jev benchmark sample.
+            agent = self._agent_label(detail, metrics)
+            groups[(agent, metrics["action_space"])].append(metrics)
+        rows = []
+        for (agent, action_space), samples in sorted(groups.items()):
+            successful = [item for item in samples if item["success"]]
+            wall = [item["wall_time_ms"] for item in successful]
+            decisions = [
+                item["decision_time_ms"] for item in successful if item["decision_time_ms"] is not None
+            ]
+            executions = [
+                item["execution_time_ms"] for item in successful if item["execution_time_ms"] is not None
+            ]
+            rows.append(
+                {
+                    "agent": agent,
+                    "action_space": action_space,
+                    "samples": len(samples),
+                    "successful_samples": len(successful),
+                    "success_rate": mean(float(item["success"]) for item in samples),
+                    "median_wall_time_ms": median(wall) if wall else None,
+                    "mean_wall_time_ms": mean(wall) if wall else None,
+                    "median_decision_time_ms": median(decisions) if decisions else None,
+                    "median_execution_time_ms": median(executions) if executions else None,
+                    "mean_actions": mean(item["actions"] for item in successful) if successful else None,
+                    "mean_gui_ratio": (
+                        mean(item["gui_ratio"] for item in successful) if successful else None
+                    ),
+                    "mean_route_diversity": (
+                        mean(item["route_diversity"] for item in successful) if successful else None
+                    ),
+                }
+            )
+        return {"task": task, "rows": rows}
+
     def _events(self, record: dict[str, Any]) -> list[dict[str, Any]]:
+        if record.get("execution_profile") == "external":
+            return []
         base = Path(record["trace_base"])
         names = SUITE_NAMES if record["task"] == "all" else (record["task"],)
         events: list[dict[str, Any]] = []
@@ -192,6 +307,78 @@ class RunManager:
                 item["suite"] = name
                 events.append(item)
         return sorted(events, key=lambda item: item.get("timestamp", 0))[-100:]
+
+    def _metrics(self, record: dict[str, Any]) -> dict[str, Any]:
+        if record.get("external_metrics"):
+            external = record["external_metrics"]
+            channels = external["channels"]
+            actions = external["actions"]
+            return {
+                **external,
+                "action_space": record["action_space"],
+                "gui_ratio": channels.get("gui", 0) / actions if actions else 0.0,
+                "route_diversity": len([name for name, count in channels.items() if count]),
+                "route_switches": None,
+                "fallback_count": 0,
+            }
+        events = record.get("events", [])
+        receipts = [
+            event["payload"]
+            for event in events
+            if event["kind"] == "receipt" and event["payload"].get("channel") != "control"
+        ]
+        decisions = [event["payload"] for event in events if event["kind"] == "decision"]
+        episodes = [event["payload"] for event in events if event["kind"] == "episode"]
+        channels = Counter(str(item.get("channel", "unknown")) for item in receipts)
+        sequence = [str(item.get("channel", "unknown")) for item in receipts]
+        decision_latencies = [float(item.get("latency_ms", 0)) for item in decisions]
+        execution_latencies = [float(item.get("duration_ms", 0)) for item in receipts]
+        fallback_count = sum(
+            1 for event in events if event["kind"] == "policy_exchange" and event["payload"].get("fallback")
+        )
+        wall_time = sum(float(item.get("duration_ms", 0)) for item in episodes) if episodes else None
+        success = bool(episodes) and all(item.get("status") == "success" for item in episodes)
+        actions = len(receipts)
+        profile = record.get("execution_profile")
+        action_space = {
+            "adaptive": "hybrid",
+            "visible": "gui_only",
+            "hybrid": "legacy_evaluation",
+        }.get(profile, "legacy_evaluation")
+        return {
+            "success": success,
+            "wall_time_ms": wall_time,
+            "decision_time_ms": sum(decision_latencies) if decision_latencies else None,
+            "median_decision_latency_ms": median(decision_latencies) if decision_latencies else None,
+            "execution_time_ms": sum(execution_latencies) if execution_latencies else None,
+            "actions": actions,
+            "channels": dict(channels),
+            "gui_ratio": channels.get("gui", 0) / actions if actions else 0.0,
+            "route_diversity": len(channels),
+            "route_switches": sum(a != b for a, b in zip(sequence, sequence[1:], strict=False)),
+            "fallback_count": fallback_count,
+            "action_space": action_space,
+        }
+
+    @staticmethod
+    def _agent_label(record: dict[str, Any], metrics: dict[str, Any]) -> str:
+        if record.get("agent"):
+            return str(record["agent"])
+        if record.get("policy") == "jev" and metrics["fallback_count"]:
+            return "jev_with_fallback"
+        return str(record.get("policy", "unknown"))
+
+    @staticmethod
+    def _optional_nonnegative(value: Any) -> float | None:
+        if value is None:
+            return None
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("可选时间指标必须是数值") from exc
+        if parsed < 0:
+            raise ValueError("可选时间指标不能为负数")
+        return parsed
 
     def _refresh_active(self) -> None:
         with self._lock:

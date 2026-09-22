@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="CUA-JEV 本地混合动作路由实验控制台">
+  <meta name="description" content="CUA-JEV 本地混合动作空间实验台">
   <title>CUA-JEV Console · ZJU REAL Lab</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
   <link rel="stylesheet" href="/static/style.css">
@@ -12,69 +12,86 @@
   <a class="skip-link" href="#main">跳到主要内容</a>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand">
-        <img src="/static/logo-mark.svg" alt="ZJU-REAL 标志">
-        <div><strong>CUA–JEV</strong><span>REAL Lab · ZJU</span></div>
-      </div>
+      <div class="brand"><img src="/static/logo-mark.svg" alt="ZJU-REAL 标志"><div><strong>CUA–JEV</strong><span>REAL Lab · ZJU</span></div></div>
       <p class="nav-caption">WORKSPACE</p>
       <nav aria-label="页面导航">
         <a class="active" href="#console"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>实验控制台</a>
-        <a href="#evidence"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>决策证据</a>
-        <a href="#history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M4 12a8 8 0 1 0 2-5.3L4 9V4h5"/></svg>运行记录</a>
+        <a href="#benchmark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9m7 10V5m7 14v-7M3 19h18"/></svg>性能对比</a>
+        <a href="#traces"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>执行轨迹</a>
       </nav>
-      <div class="runtime-card">
-        <div class="runtime-head"><span>本机运行时</span><i id="runtime-dot"></i></div>
-        <dl><div><dt>Jev API</dt><dd id="key-state">检查中</dd></div><div><dt>Executor</dt><dd>Windows</dd></div><div><dt>状态</dt><dd id="runtime-state">空闲</dd></div></dl>
-      </div>
+      <div class="runtime-card"><div class="runtime-head"><span>本机运行时</span><i id="runtime-dot"></i></div><dl><div><dt>Jev API</dt><dd id="key-state">检查中</dd></div><div><dt>Executor</dt><dd>Windows</dd></div><div><dt>状态</dt><dd id="runtime-state">空闲</dd></div></dl></div>
       <div class="lab-mark"><img src="/static/qiushi-eagle.svg" alt="浙江大学求是鹰标志"><span>Reasoning · Embodied<br>Agentic · Lifelong AI</span></div>
     </aside>
 
     <main id="main">
       <header class="page-head" id="console">
-        <div><p class="eyebrow">LOCAL EXPERIMENT CONSOLE</p><h1>让 Jev 在真实可执行路线中做选择。</h1><p>同一子目标，多条通道；每次执行都留下决策概率、Guard 回执和独立验证。</p></div>
+        <div><p class="eyebrow">HYBRID COMPUTER USE BENCHMARK</p><h1>让 Jev 在真实动作空间中选择。</h1><p>同一任务、同一终态验证器，对比混合动作空间、纯 GUI 与非 Jev agent。</p></div>
         <div class="status-pill"><i></i><span id="header-status">Ready</span></div>
       </header>
 
       <section class="workspace-grid">
-        <article class="panel task-panel">
-          <div class="panel-head"><div><small>01 / TASK</small><h2>选择代表性任务</h2></div><span id="task-count">4 suites</span></div>
-          <div id="task-grid" class="task-grid" role="radiogroup" aria-label="任务"></div>
-        </article>
-
+        <article class="panel task-panel"><div class="panel-head"><div><small>01 / TASK</small><h2>选择代表性任务</h2></div><span id="task-count">4 suites</span></div><div id="task-grid" class="task-grid" role="radiogroup" aria-label="任务"></div></article>
         <article class="panel run-panel">
-          <div class="panel-head"><div><small>02 / MODE</small><h2>运行配置</h2></div><span>one episode</span></div>
-          <fieldset class="segmented three-way"><legend>运行模式</legend><label><input type="radio" name="mode" value="adaptive" checked><span>Adaptive Demo</span></label><label><input type="radio" name="mode" value="physical"><span>Physical Demo</span></label><label><input type="radio" name="mode" value="evaluation"><span>Evaluation</span></label></fieldset>
-          <fieldset id="evaluation-policy" class="segmented" hidden><legend>评测策略</legend><label><input type="radio" name="policy" value="jev" checked><span>Jev</span></label><label><input type="radio" name="policy" value="rule"><span>Rule baseline</span></label></fieldset>
-          <div id="profile-note" class="profile-note"><b>ADAPTIVE ROUTING</b><span>真实应用保持可见；Jev 同时选择下一子目标和 PyAutoGUI、DOM、COM、CLI、MCP 或 API 路线。</span></div>
-          <div class="run-options"><label><input id="visible-desktop" type="checkbox" checked disabled><span><b>展示真实桌面应用</b><small id="visible-hint">Adaptive Demo 必须可见运行</small></span></label></div>
-          <div class="route-summary"><span id="route-title">本任务执行链</span><div id="selected-routes"></div></div>
+          <div class="panel-head"><div><small>02 / CONFIGURATION</small><h2>动作空间与决策器</h2></div><span>one episode</span></div>
+          <fieldset class="segmented"><legend>动作空间</legend><label><input type="radio" name="mode" value="hybrid" checked><span>Hybrid Action Space</span></label><label><input type="radio" name="mode" value="gui"><span>GUI Only</span></label></fieldset>
+          <fieldset class="segmented policy-select"><legend>决策器</legend><label><input type="radio" name="policy" value="jev" checked><span>Jev</span></label><label><input type="radio" name="policy" value="rule"><span>Rule baseline</span></label></fieldset>
+          <div id="profile-note" class="profile-note"><b>HYBRID ACTION SPACE</b><span>Jev 在 PyAutoGUI、DOM、COM、CLI、MCP 与 API 候选中选择下一条真实可执行路线。</span></div>
+          <div class="route-summary"><span>本任务可用能力</span><div id="selected-routes"></div></div>
           <button id="run-button" class="primary-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg><span>启动实验</span></button>
-          <button id="stop-button" class="stop-button" hidden>停止当前实验</button>
-          <p id="action-error" class="error" role="alert"></p>
+          <button id="stop-button" class="stop-button" hidden>停止当前实验</button><p id="action-error" class="error" role="alert"></p>
         </article>
-
         <article class="panel live-panel">
-          <div class="panel-head"><div><small id="trace-kind">03 / WAITING</small><h2>真实执行闭环</h2></div><span id="event-count" aria-live="polite">0 events</span></div>
-          <div id="loop-progress" class="loop-progress" aria-label="Observe、Decide、Act、Verify 执行进度"></div>
-          <div id="live-empty" class="empty-state"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17h3l2-7 4 10 2-6h5"/></svg><b>等待一次真实实验</b><span>运行后，桌面应用变化与 Observation、Jev Decision、Executor Receipt、独立 Verification 会同步出现。</span></div>
-          <ol id="timeline" class="timeline" aria-live="polite"></ol>
+          <div class="panel-head"><div><small id="trace-kind">03 / WAITING</small><h2>当前运行状态</h2></div><span id="event-count" aria-live="polite">0 events</span></div>
+          <div id="loop-progress" class="loop-progress" aria-label="CUA-JEV 内部执行阶段"></div>
+          <p class="pipeline-note">这是 CUA-JEV 的内部执行管线，用于解释日志；不是 Jev 官方规定的四步协议。</p>
+          <div id="live-empty" class="empty-state"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17h3l2-7 4 10 2-6h5"/></svg><b>等待一次真实实验</b><span>启动后，这里只显示当前动作；完整证据会进入下方 Trace Explorer。</span></div>
+          <div id="current-action" class="current-action" hidden></div>
         </article>
       </section>
 
-      <section class="evidence-section" id="evidence">
-        <div class="section-title"><div><p class="eyebrow">DECISION EVIDENCE</p><h2>不是只看成功，而是看为什么这样走。</h2></div><div id="run-metrics" class="metric-strip"></div></div>
-        <div class="evidence-grid">
-          <article class="panel"><div class="panel-head"><div><small>CANDIDATES</small><h3>最近一次路线选择</h3></div></div><div id="candidate-board" class="candidate-board"><p class="muted">运行后显示候选动作与概率。</p></div></article>
-          <article class="panel"><div class="panel-head"><div><small>VERIFIER</small><h3>终态证据</h3></div></div><div id="verification-board" class="verification-board"><p class="muted">独立验证结果会出现在这里。</p></div></article>
-        </div>
+      <section class="benchmark-section" id="benchmark">
+        <div class="section-title"><div><p class="eyebrow">BENCHMARK MATRIX</p><h2>速度只是结果，分解后才知道优势来自哪里。</h2><p>仅聚合同一任务的真实本机样本；Jev fallback 会单独分组，不混入纯 Jev 数据。</p></div><button id="baseline-info" class="secondary-button">Codex baseline contract</button></div>
+        <div id="benchmark-insights" class="insight-strip" aria-live="polite"></div>
+        <article class="panel benchmark-panel">
+          <div class="benchmark-head"><div><small>LOWER IS BETTER</small><h3 id="benchmark-title">端到端耗时</h3></div><span id="benchmark-sample-count">0 samples</span></div>
+          <div id="benchmark-chart" class="benchmark-chart"></div><div id="benchmark-metrics" class="benchmark-metrics"></div>
+        </article>
       </section>
 
-      <section class="history-section" id="history">
-        <div class="section-title"><div><p class="eyebrow">RUN ARCHIVE</p><h2>本机实验记录</h2></div><span>保存在 runs/ui，不上传任何密钥</span></div>
-        <div class="panel table-panel"><table><thead><tr><th>运行</th><th>任务</th><th>模式</th><th>策略</th><th>状态</th><th>路线</th><th>结果</th></tr></thead><tbody id="history-body"></tbody></table></div>
+      <section class="trace-section" id="traces">
+        <div class="section-title"><div><p class="eyebrow">TRACE EXPLORER</p><h2>一次运行，一条可交互的完整证据链。</h2><p>选择历史运行，再按真实动作展开 Observation、候选路线、Jev 决策、Guard、Executor 与 Verifier。</p></div><span>保存在 runs/ui，不上传密钥</span></div>
+        <div class="trace-shell panel">
+          <aside class="run-rail" aria-label="运行记录"><div class="run-rail-head"><b>运行记录</b><span id="run-count">0</span></div><div id="run-list"></div></aside>
+          <div class="trace-detail">
+            <div id="trace-placeholder" class="trace-placeholder"><b>选择一次运行</b><span>轨迹和动作空间分布将在这里显示。</span></div>
+            <div id="trace-content" hidden>
+              <div class="trace-detail-head"><div><small id="trace-run-id"></small><h3 id="trace-run-title"></h3><p id="trace-run-meta"></p></div><span id="trace-status" class="status"></span></div>
+              <div id="run-metrics" class="metric-strip"></div>
+              <div class="route-evidence"><div id="action-space-chart" class="action-space-chart" role="img" aria-label="动作空间使用分布"></div><div><small>ACTION SPACE MIX</small><h3>整次运行的路线分布</h3><p id="route-insight">每个扇区代表实际执行的一种通道。</p><div id="channel-legend" class="channel-legend"></div></div></div>
+              <div class="step-head"><b>执行步骤</b><span>点击任一步骤查看完整证据</span></div><div id="trace-steps" class="trace-steps"></div>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
+
+  <dialog id="baseline-dialog" class="baseline-dialog">
+    <div class="dialog-head"><div><small>EXTERNAL BASELINE</small><h2>Codex Computer Use 接入约定</h2></div><button id="close-baseline" aria-label="关闭">×</button></div>
+    <p>CUA-JEV 不会用 Rule 冒充 Codex。Codex Computer Use 必须执行同一任务，并通过相同终态 Verifier，再把真实耗时、动作数和通道计数写入 baseline API。</p>
+    <pre><code>POST /api/baselines
+{
+  "agent": "codex_computer_use",
+  "task": "edge",
+  "action_space": "gui_only",
+  "success": true,
+  "duration_ms": 42000,
+  "actions": 8,
+  "channels": {"gui": 8},
+  "verifier": "shared_terminal_verifier"
+}</code></pre>
+    <p class="dialog-note">没有真实样本时，Benchmark Matrix 会明确显示“未采样”，不会补造数字。</p>
+  </dialog>
   <script src="/static/app.js" defer></script>
 </body>
 </html>
