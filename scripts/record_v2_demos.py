@@ -191,9 +191,9 @@ def run_one(
             if recorder and not recorder_started and (
                 state["step"] > 0 or detail["status"] != "running"
             ):
+                time.sleep(0.25)
                 recorder.start()
                 recorder_started = True
-                time.sleep(0.25)
             if (
                 recorder
                 and recorder_started
