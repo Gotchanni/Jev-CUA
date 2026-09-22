@@ -122,6 +122,9 @@ Jev Hybrid versus Jev GUI Only for action-space efficiency, and Jev Hybrid versu
 wall time plus model-cost USD. Benchmark values are read from real local run records; missing paired
 samples remain visibly unavailable rather than being estimated. Run history stays under `runs/ui/`, and the
 page never accepts or stores an API key.
+Each comparison row expands to a representative run: Jev steps come from the full decision/execution trace,
+while Codex shows only the grouped tool operations captured in its pilot record. The latter are not claimed
+to be one-to-one atomic actions.
 
 Experiments are launched explicitly from the CLI. **Hybrid Action Space** lets the selected policy choose both
 the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API route. **GUI Only** is the

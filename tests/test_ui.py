@@ -56,6 +56,7 @@ def test_external_codex_baseline_uses_shared_benchmark_contract(tmp_path: Path) 
                 "action_space": "gui_only",
                 "samples": 1,
                 "successful_samples": 1,
+                "representative_run_id": response.json()["id"],
                 "success_rate": 1.0,
                 "median_wall_time_ms": 42000.0,
                 "mean_wall_time_ms": 42000.0,
@@ -74,6 +75,89 @@ def test_external_codex_baseline_uses_shared_benchmark_contract(tmp_path: Path) 
                 "cost_samples": 0,
             }
         ]
+
+
+def test_baseline_steps_are_explicitly_recorded_and_retrievable(tmp_path: Path) -> None:
+    with TestClient(create_app(root=tmp_path, data=tmp_path / "runs")) as client:
+        headers = {"X-CUA-JEV-CSRF": client.get("/api/bootstrap").json()["csrf"]}
+        run = client.post(
+            "/api/baselines",
+            headers=headers,
+            json={
+                "agent": "codex_computer_use",
+                "task": "edge",
+                "action_space": "hybrid",
+                "success": True,
+                "duration_ms": 1200,
+                "actions": 2,
+                "channels": {"script": 2},
+            },
+        ).json()
+        path = f"/api/baselines/{run['id']}/steps"
+        assert client.get(path.replace("/api/baselines/", "/api/runs/")).json()["steps"] == []
+        payload = {
+            "source": "local_session_tool_trace",
+            "steps": [
+                {"title": "Open demo store", "channel": "script"},
+                {"title": "Verify receipt", "channel": "verification", "verified": True},
+            ],
+        }
+        assert client.post(path, json=payload).status_code == 403
+        assert (
+            client.post(
+                path, headers=headers, json={**payload, "steps": [{"title": "bad", "channel": ["script"]}]}
+            ).status_code
+            == 400
+        )
+        assert client.post(path, headers=headers, json=payload).status_code == 200
+        steps = client.get(f"/api/runs/{run['id']}/steps").json()
+        assert steps["source"] == "recorded_tool_batches"
+        assert steps["terminal_verified"] is True
+        assert [item["title"] for item in steps["steps"]] == ["Open demo store", "Verify receipt"]
+
+
+def test_jev_steps_use_full_trace_without_exposing_raw_state(tmp_path: Path) -> None:
+    manager = RunManager(tmp_path, tmp_path / "runs")
+    run_id = "jev-steps"
+    run_dir = tmp_path / "runs" / run_id
+    run_dir.mkdir()
+    trace = run_dir / "trace-edge.jsonl"
+    events = [
+        {"kind": "observation", "payload": {"subgoal": "Repair a test", "state": {"secret": "hidden"}}},
+        {
+            "kind": "candidates",
+            "payload": {
+                "items": [
+                    {"id": "mcp_fix", "description": "Repair the failing test through the filesystem tool."}
+                ]
+            },
+        },
+        {"kind": "decision", "payload": {"latency_ms": 43}},
+        {
+            "kind": "commitment",
+            "payload": {"candidate_id": "mcp_fix", "channel": "mcp", "capability": "filesystem.write_text"},
+        },
+        {"kind": "receipt", "payload": {"duration_ms": 12, "output": "private content"}},
+        {"kind": "verification", "payload": {"passed": True}},
+        {"kind": "episode", "payload": {"status": "success"}},
+    ]
+    trace.write_text("\n".join(json.dumps(event) for event in events), encoding="utf-8")
+    manager._save({"id": run_id, "task": "edge", "trace_base": str(run_dir / "trace.jsonl")})
+    steps = manager.steps(run_id)
+    assert steps["terminal_verified"] is True
+    assert steps["steps"] == [
+        {
+            "number": 1,
+            "title": "Repair the failing test through the filesystem tool.",
+            "channel": "mcp",
+            "capability": "filesystem.write_text",
+            "decision_ms": 43,
+            "execution_ms": 12,
+            "verified": True,
+        }
+    ]
+    assert "private content" not in json.dumps(steps)
+    assert "hidden" not in json.dumps(steps)
 
 
 def test_codex_baseline_token_cost_uses_official_enterprise_reference(tmp_path: Path) -> None:

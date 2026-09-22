@@ -30,6 +30,35 @@ def _median_present(samples: list[dict[str, Any]], key: str) -> float | None:
     return median(values) if values else None
 
 
+def _baseline_steps(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or len(value) > 50:
+        raise ValueError("steps must be a list of at most 50 recorded tool batches")
+    steps = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("Each step must be an object")
+        title = item.get("title")
+        channel = item.get("channel")
+        verified = item.get("verified", False)
+        if not isinstance(title, str) or not 1 <= len(title.strip()) <= 180:
+            raise ValueError("Each step needs a short title")
+        if not isinstance(channel, str) or channel not in {
+            "gui",
+            "dom",
+            "com",
+            "cli",
+            "mcp",
+            "api",
+            "script",
+            "verification",
+        }:
+            raise ValueError("Each step needs a supported channel")
+        if not isinstance(verified, bool):
+            raise ValueError("Step verified must be a boolean")
+        steps.append({"title": title.strip(), "channel": channel, "verified": verified})
+    return steps
+
+
 TASK_CATALOG = {
     "edge": {
         "title": "Edge checkout workflow",
@@ -226,6 +255,68 @@ class RunManager:
         record["metrics"] = self._metrics({**record, "events": all_events})
         return record
 
+    def steps(self, run_id: str) -> dict[str, Any]:
+        """Return a bounded, display-safe step view, not raw prompts or tool arguments."""
+        record = self._load(run_id)
+        if record.get("execution_profile") == "external":
+            external = record["external_metrics"]
+            batches = external.get("steps", [])
+            return {
+                "run_id": run_id,
+                "source": "recorded_tool_batches" if batches else "not_captured",
+                "terminal_verified": bool(external.get("success")),
+                "steps": [{"number": number, **item} for number, item in enumerate(batches, 1)],
+            }
+        steps: list[dict[str, Any]] = []
+        current: dict[str, Any] | None = None
+        candidate_titles: dict[str, str] = {}
+        terminal_verified = False
+        for event in self._events(record, limit=None):
+            kind = event.get("kind")
+            payload = event.get("payload", {})
+            if kind == "observation":
+                if current is not None:
+                    steps.append(current)
+                candidate_titles = {}
+                current = {
+                    "number": len(steps) + 1,
+                    "title": str(payload.get("subgoal") or "Next action")[:180],
+                    "channel": None,
+                    "capability": None,
+                    "decision_ms": None,
+                    "execution_ms": None,
+                    "verified": None,
+                }
+            elif kind == "candidates" and current is not None:
+                items = payload.get("items")
+                candidate_titles = {
+                    str(item["id"]): str(item["description"])
+                    for item in (items if isinstance(items, list) else [])
+                    if isinstance(item, dict) and item.get("id") and item.get("description")
+                }
+            elif kind == "decision" and current is not None:
+                current["decision_ms"] = payload.get("latency_ms")
+            elif kind == "commitment" and current is not None:
+                current["title"] = candidate_titles.get(str(payload.get("candidate_id")), current["title"])[
+                    :180
+                ]
+                current["channel"] = payload.get("channel")
+                current["capability"] = payload.get("capability")
+            elif kind == "receipt" and current is not None:
+                current["execution_ms"] = payload.get("duration_ms")
+            elif kind == "verification" and current is not None:
+                current["verified"] = bool(payload.get("passed"))
+            elif kind == "episode":
+                terminal_verified = payload.get("status") == "success"
+        if current is not None:
+            steps.append(current)
+        return {
+            "run_id": run_id,
+            "source": "jev_run_trace" if steps else "not_captured",
+            "terminal_verified": terminal_verified,
+            "steps": steps,
+        }
+
     def import_baseline(self, spec: dict[str, Any]) -> dict[str, Any]:
         """Import a measured external-agent result without inventing unavailable timings."""
         task = str(spec.get("task", ""))
@@ -274,6 +365,7 @@ class RunManager:
                 "channels": channels,
                 "verifier": str(spec.get("verifier", "shared_terminal_verifier")),
                 "evidence": str(spec.get("evidence", "")),
+                "steps": _baseline_steps(spec.get("steps", [])),
             },
         }
         run_dir = self.data / run_id
@@ -303,6 +395,20 @@ class RunManager:
             self._save(record)
         return self.detail(run_id)
 
+    def attach_baseline_steps(self, run_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+        """Attach a curated trace of actual external tool batches to a pilot record."""
+        steps = _baseline_steps(spec.get("steps"))
+        if spec.get("source") != "local_session_tool_trace":
+            raise ValueError("source must identify local_session_tool_trace")
+        with self._lock:
+            record = self._load(run_id)
+            if record.get("execution_profile") != "external" or record.get("agent") != "codex_computer_use":
+                raise ValueError("Tool batches can only be attached to a Codex baseline")
+            record["external_metrics"]["steps"] = steps
+            record["external_metrics"]["steps_source"] = spec["source"]
+            self._save(record)
+        return self.steps(run_id)
+
     def benchmarks(self, task: str | None = None) -> dict[str, Any]:
         if task is not None and task not in SUITE_NAMES:
             raise ValueError("Invalid benchmark task")
@@ -317,6 +423,7 @@ class RunManager:
                 continue
             detail = self.detail(record["id"])
             metrics = detail["metrics"]
+            metrics["run_id"] = detail["id"]
             if detail["status"] not in {"completed", "failed"} or metrics["wall_time_ms"] is None:
                 continue
             if metrics["action_space"] == "legacy_evaluation":
@@ -328,6 +435,14 @@ class RunManager:
         for (agent, action_space), samples in sorted(groups.items()):
             successful = [item for item in samples if item["success"]]
             wall = [item["wall_time_ms"] for item in successful]
+            midpoint = median(wall) if wall else None
+            representative = (
+                min(successful, key=lambda item: (abs(item["wall_time_ms"] - midpoint), item["run_id"]))[
+                    "run_id"
+                ]
+                if midpoint is not None
+                else None
+            )
             decisions = [
                 item["decision_time_ms"] for item in successful if item["decision_time_ms"] is not None
             ]
@@ -340,6 +455,7 @@ class RunManager:
                     "action_space": action_space,
                     "samples": len(samples),
                     "successful_samples": len(successful),
+                    "representative_run_id": representative,
                     "success_rate": mean(float(item["success"]) for item in samples),
                     "median_wall_time_ms": median(wall) if wall else None,
                     "mean_wall_time_ms": mean(wall) if wall else None,

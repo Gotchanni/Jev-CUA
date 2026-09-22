@@ -117,12 +117,46 @@ function benchmarkRow(row, maxDuration, comparison) {
   const kind = row.action_space === "hybrid" ? "hybrid" : "gui";
   const mode = kind === "hybrid" ? "Hybrid" : "GUI Only";
   const label = comparison === "agent" ? (agentLabel[row.agent] || row.agent) : `${agentLabel[row.agent] || row.agent} · ${mode}`;
-  const actions = row.mean_actions == null ? "—" : row.mean_actions.toFixed(1);
-  const sampleLabel = row.agent === "codex_computer_use" && row.samples === 1 ? "1 pilot run" : `${row.successful_samples}/${row.samples} runs`;
   const usd = row.agent === "codex_computer_use" ? row.median_reference_cost_usd : row.median_model_cost_usd;
   const cost = usd == null ? "—" : `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3)}`;
   const costCell = comparison === "agent" ? `<div class="result-cost" aria-label="Estimated model cost"><strong>${cost}</strong></div>` : "";
-  return `<div class="result-row ${comparison}-row"><div class="result-name"><b>${escapeHTML(label)}</b></div><div class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></div>${costCell}<div class="result-meta">${sampleLabel} · ${actions} actions</div></div>`;
+  const runId = escapeHTML(row.representative_run_id || "");
+  return `<details class="result-detail" data-run-id="${runId}"><summary class="result-row ${comparison}-row"><span class="result-name"><b>${escapeHTML(label)}</b></span><span class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></span>${costCell}<span class="row-open">View steps</span></summary><div class="step-panel"><p>Open to load recorded steps.</p></div></details>`;
+}
+
+function renderRecordedSteps(data) {
+  const steps = data.steps || [];
+  if (!steps.length) return `<div class="step-empty">This run did not capture a step-level trace.</div>`;
+  const source = data.source === "jev_run_trace" ? "Representative Jev run" : "Recorded Codex tool calls, grouped by stage";
+  const verdict = data.terminal_verified ? "Terminal verified" : "Terminal result unavailable";
+  const items = steps.map((step) => {
+    const channel = step.channel ? escapeHTML(String(step.channel).toUpperCase()) : "ACTION";
+    const tool = step.capability ? ` · ${escapeHTML(step.capability)}` : "";
+    const status = step.verified === true ? "Verified" : data.source !== "jev_run_trace" ? "Recorded" : step.verified === false ? "Check failed" : "Check unavailable";
+    const statusClass = step.verified === true ? "is-verified" : step.verified === false && data.source === "jev_run_trace" ? "is-failed" : "";
+    return `<li><span class="step-number">${String(step.number).padStart(2, "0")}</span><div class="step-copy"><b>${escapeHTML(step.title)}</b><p>${channel}${tool}</p></div><span class="step-status ${statusClass}">${status}</span></li>`;
+  }).join("");
+  return `<div class="step-panel-head"><span>${source}</span><b>${verdict}</b></div><ol class="step-list">${items}</ol>`;
+}
+
+function bindStepDetails() {
+  document.querySelectorAll(".result-detail").forEach((detail) => detail.addEventListener("toggle", async () => {
+    if (!detail.open || detail.dataset.loaded) return;
+    detail.dataset.loaded = "true";
+    const panel = detail.querySelector(".step-panel");
+    panel.innerHTML = `<p>Loading recorded steps…</p>`;
+    if (!detail.dataset.runId) {
+      panel.innerHTML = `<div class="step-empty">No successful run is available for this result.</div>`;
+      return;
+    }
+    try {
+      const data = await getJSON(`/api/runs/${encodeURIComponent(detail.dataset.runId)}/steps`, 1);
+      panel.innerHTML = renderRecordedSteps(data);
+    } catch (error) {
+      detail.dataset.loaded = "";
+      panel.innerHTML = `<div class="step-empty">Steps unavailable: ${escapeHTML(error.message)}. Close and reopen to retry.</div>`;
+    }
+  }));
 }
 
 function pairedRows(rows) {
@@ -158,8 +192,6 @@ async function renderBenchmark() {
     $(selector).innerHTML = `<div class="empty-results"><b>Loading measured runs</b><span>Reading the local benchmark store…</span></div>`;
   });
   $("#speedup-callout").innerHTML = `<strong>—</strong><span>Hybrid speedup</span>`;
-  $("#action-foot").textContent = "";
-  $("#agent-foot").textContent = "";
   try {
     const { rows = [] } = await getJSON(`/api/benchmarks?task=${encodeURIComponent(taskId)}`, 1);
     if (request !== benchmarkRequest) return;
@@ -172,10 +204,8 @@ async function renderBenchmark() {
       const ratio = values.gui_only.median_wall_time_ms / values.hybrid.median_wall_time_ms;
       const faster = ratio >= 1 ? "Hybrid" : "GUI Only";
       $("#speedup-callout").innerHTML = `<strong>${Math.max(ratio, 1 / ratio).toFixed(1)}×</strong><span>${faster} faster</span>`;
-      $("#action-foot").textContent = `${values.hybrid.samples} Hybrid · ${values.gui_only.samples} GUI Only · same terminal verifier`;
     } else {
       $("#action-rows").innerHTML = `<div class="empty-results"><b>Jev pair unavailable</b><span>Run both Hybrid and GUI Only to compare action spaces.</span></div>`;
-      $("#action-foot").textContent = "Only successful measured runs are compared.";
     }
     const jevHybrid = rows.find((row) => row.agent === "jev" && row.action_space === "hybrid" && row.median_wall_time_ms != null);
     const codexHybrid = rows.find((row) => row.agent === "codex_computer_use" && row.action_space === "hybrid" && row.median_wall_time_ms != null);
@@ -183,11 +213,10 @@ async function renderBenchmark() {
       const agentRows = [jevHybrid, codexHybrid];
       const maxAgentTime = Math.max(...agentRows.map((row) => row.median_wall_time_ms));
       $("#agent-rows").innerHTML = agentRows.map((row) => benchmarkRow(row, maxAgentTime, "agent")).join("");
-      $("#agent-foot").textContent = `${jevHybrid.samples} Jev runs · ${codexHybrid.samples} Codex pilot ${codexHybrid.samples === 1 ? "run" : "runs"} · same terminal verifier`;
     } else {
       $("#agent-rows").innerHTML = `<div class="empty-results"><b>Hybrid baseline unavailable</b><span>This comparison needs successful Jev and Codex Hybrid runs.</span></div>`;
-      $("#agent-foot").textContent = "No Codex values are inferred from Jev's GUI Only runs.";
     }
+    bindStepDetails();
   } catch (error) {
     if (request !== benchmarkRequest) return;
     ["#action-rows", "#agent-rows"].forEach((selector) => {

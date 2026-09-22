@@ -103,6 +103,13 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
         except KeyError as exc:
             raise HTTPException(404, detail="run not found") from exc
 
+    @app.get("/api/runs/{run_id}/steps")
+    def get_run_steps(run_id: str):
+        try:
+            return manager.steps(run_id)
+        except KeyError as exc:
+            raise HTTPException(404, detail="run not found") from exc
+
     @app.post("/api/runs/{run_id}/stop")
     def stop_run(run_id: str):
         try:
@@ -121,6 +128,15 @@ def create_app(root: str | Path | None = None, data: str | Path | None = None):
     async def attach_baseline_usage(run_id: str, request: Request):
         try:
             return manager.attach_baseline_usage(run_id, await request.json())
+        except KeyError as exc:
+            raise HTTPException(404, detail="run not found") from exc
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
+
+    @app.post("/api/baselines/{run_id}/steps")
+    async def attach_baseline_steps(run_id: str, request: Request):
+        try:
+            return manager.attach_baseline_steps(run_id, await request.json())
         except KeyError as exc:
             raise HTTPException(404, detail="run not found") from exc
         except ValueError as exc:
