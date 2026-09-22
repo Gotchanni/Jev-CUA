@@ -1,377 +1,149 @@
-# CUA-JEV
+<p align="center">
+  <img src="src/cua_jev/ui/static/logo-mark.svg" width="100" alt="ZJU-REAL Lab logo">
+</p>
 
-**A typed, verifiable Jev action router for hybrid Windows computer use.**
+<h1 align="center">CUA-JEV</h1>
 
-CUA-JEV is a working reference framework for bringing Jev into Windows computer use. It turns application
-state into safe, typed action candidates, lets Jev choose both the next intent and execution channel, and
-closes every step with guarded execution and independent verification.
+<p align="center"><strong>Jev-powered hybrid action space for computer use</strong><br>让 Jev 在真实桌面任务中选择下一步做什么，以及用哪一种工具做。</p>
 
-## Project position
+<p align="center">
+  <a href="https://gotchanni.github.io/Jev-CUA/">项目网页 · 视频与交互式结果</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#扩展一个新任务">扩展指南</a> ·
+  <a href="#roadmap">Roadmap</a>
+</p>
 
-CUA-JEV is an **open reference architecture, capability-pack SDK and evaluation harness for hybrid Windows
-computer use**. It is useful when an application task can expose structured state and several safe, typed ways to
-reach the same subgoal—for example PyAutoGUI, DOM, COM, CLI, MCP or a filesystem API—and the developer wants
-to build a Jev-powered CUA without first training a task-specific routing model.
+CUA-JEV 是一个面向 Windows Computer-Use Agent（CUA）的开源参考框架。它把 DOM、Windows UI Automation、Excel COM、终端和文件系统等结构化状态，转换为一组**当前合法、可执行、可验证**的候选动作；[Jev](https://docs.typesafe.ai/introduction) 从中选择一个 `任务意图 × 执行通道`，框架再负责安全检查、实际执行、结果验证和下一轮观察。首版不训练专用路由模型，也不依赖 VLM，提供四个完整可运行的任务范例及 Hybrid / GUI Only 对照实验。
 
-The reusable output is not the four example workflows by themselves. The project provides:
+> **能力边界：**这不是“给任意指令，就能操作任意 Windows 软件”的通用 Agent。目前四个案例都有任务专属适配器、候选动作与终态验证器。Jev 负责受约束的选择，不负责自由生成操作脚本，也不凭截图理解陌生软件。
 
-- a common candidate, guard, executor, receipt and verifier contract across heterogeneous Windows channels;
-- an action-space ablation (`Hybrid Action Space` versus `GUI Only`) that is independent of the decision
-  policy;
-- complete JSONL decision evidence and a read-only benchmark showcase;
-- a benchmark contract for Jev, deterministic policies and external agents such as Codex;
-- four executable capability-pack examples showing how to add a new application and independent terminal
-  verifier.
+![CUA-JEV：任务适配器、Jev 决策、执行器与验证器组成的闭环](assets/architecture.svg)
 
-The primary contribution is the runnable framework and four end-to-end examples. The secondary contribution
-is the experimental surface used to derive data-backed insights about action-space routing. This release is
-not evidence that Jev is already faster or more reliable for general computer use. Four frozen workflows
-demonstrate feasibility. A publishable efficiency claim
-requires parameterized task families, repeated held-out trials, a successful GUI-only ablation and measured
-general-agent baselines under the same terminal verifiers. Until those results exist, treat the console as an
-evidence surface and the capability interfaces as the main open-source contribution.
+## 为什么是 Jev × CUA？
 
-The distinctive hypothesis is **training-free action-space routing**. Many agent stacks collect tool-use
-trajectories and then apply SFT, reinforcement learning or distillation to obtain a small routing policy.
-CUA-JEV instead compiles the current structured state into a bounded set of legal, typed `intent × route`
-candidates and asks the existing Jev decision model to select among them online. This does not remove the
-engineering needed to build capability packs, but it avoids training a new router for every application and
-makes every choice inspectable. The long-horizon suites are designed to test whether small per-step routing
-advantages accumulate into meaningful end-to-end savings.
+TypeSafe AI 将 Jev 定位为供软件直接调用的 *System One* 决策模型：输入状态和类型化问题，返回可直接用于分支的结构化答案。其 [Choice](https://docs.typesafe.ai/introduction) 原语尤其适合“从已知选项中选一个”，而不是生成一段文本再解析。TypeSafe 将模型训练方法称为 RLCD；**本项目调用现成 Jev API，并没有训练 Jev 或一个新的 CUA 模型**。[官方介绍](https://typesafe.ai/) · [开发文档](https://docs.typesafe.ai/introduction)
 
-The first prototype deliberately uses **no VLM**. It combines structured observations from Edge DOM,
-Windows UI Automation, Excel COM, VS Code/terminal text, filesystem APIs and MCP-shaped tools. In the
-GUI-only profile, PyAutoGUI emits the real mouse and keyboard input while those structured interfaces
-only observe, locate and verify state. Jev does not generate shell commands or scripts. It chooses one
-complete, typed action candidate; a deterministic guard validates it, a channel executor runs it, and an
-independent verifier checks the result.
+CUA 的动作空间天然是混合的。同一个子目标有时适合可见的鼠标键盘操作，有时更适合 DOM、COM、CLI、MCP 或文件 API。每一步都调用通用大模型重新规划、生成命令和解析输出，可能带来不必要的时间与推理费用；但固定规则也难以应对多种真实路线。我们的切入点是把**开放式规划问题收窄成受约束的动作选择问题**：适配器提供合法选项，Jev 在线选择，确定性代码负责安全与事实核验。
 
-```text
-predefined task + structured observation
-                    |
-             candidate builder
-                    |
-        Jev Choice / rule baseline
-                    |
-              ActionGuard
-                    |
-    GUI | CLI | MCP | Script/API executor
-                    |
-          receipt + independent verifier
-                    |
-               JSONL trace
-```
+这个契合点也有前提：当前任务必须能提供有用的结构化观察，并且开发者需要实现可靠的候选动作和验证器。Jev 不能替代缺失的感知、任务分解或软件集成工程。
 
-## What is implemented
+## 核心机制
 
-The shared runtime is functional and covered by tests:
+1. **Observe / Generate**：任务适配器读取当前应用状态，只枚举此刻合法的 `intent × route` 候选。一个“修复失败测试”子目标可同时提供 VS Code GUI、MCP 写文件、受限 CLI、文件 API 等真实可行路线。
+2. **Select with Jev**：调用 Jev 的 `choice` 接口，从候选 ID 中选出一个动作。选中的只是预定义的类型化动作及参数；Jev 不直接执行任意 shell 文本。
+3. **Guard / Execute**：`ActionGuard` 检查观察版本、候选身份、路径边界、写入权限与确认要求，再分发到注册的执行器。
+4. **Verify / Repeat**：执行回执不等于成功。独立验证器检查应用的新状态，JSONL trace 记录选择、执行、耗时和验证证据，然后重新观察，直到达到任务终态。
 
-- closed-loop episodes with reset, re-observation, recent-action context and explicit termination reasons;
-- deterministic stuck detection from repeated state fingerprints and repeated actions;
-- dynamic observer and capability-pack registries rather than only hard-coded action lists;
-- strict TypeSafe Jev `choice` client with response validation, retries and credential redaction;
-- composite `ActionCandidate` objects across GUI, CLI, MCP, script/API and control channels;
-- multiple executable routes for the same subgoal, so Jev chooses between real alternatives rather than
-  differently worded placeholders;
-- fail-closed guard for stale decisions, replay, path boundaries, writes and confirmation;
-- unified action receipts, verifier registry and JSONL traces;
-- deterministic rule policy for a no-key baseline and ablation experiments;
-- content-addressed Jev record/replay and cache-only execution;
-- repeated experiment summaries with channel counts, failure statuses and Wilson 95% intervals;
-- four resettable end-to-end suites plus a reproducible multi-channel routing demo.
+可复用的是 [`ActionCandidate`](src/cua_jev/models.py)、[`AgentRuntime`](src/cua_jev/runtime.py)、[`ActionGuard`](src/cua_jev/guard.py)、[`ExecutorRegistry`](src/cua_jev/registry.py)、观察器与能力包接口，以及评测/trace 契约；四个任务是这些接口的参考实现。
 
-Initial capability adapters:
+### 首版支持什么
 
-| Capability pack | Structured interface | first-release operations |
+| 任务范例 | 目标 | 首版可竞争通道 |
 |---|---|---|
-| Physical screen GUI | PyAutoGUI with UIA/DOM-assisted location | mouse movement, click, hotkey, typing, clipboard-safe text entry |
-| Edge | Playwright observation over an isolated Edge session | public-site state snapshot, DOM location, independent predicates |
-| Windows UI | UI Automation through pywinauto | top-level snapshot and semantic control location |
-| Excel | COM through pywin32 plus direct workbook APIs | workbook snapshot, formula write, chart creation, independent COM verification |
-| VS Code/Terminal | official `code` CLI, filesystem API, MCP and allowlisted argv templates | open/goto, test, exact-source repair |
-| Filesystem/MCP | typed API, in-process tools and official MCP stdio transport | list, stat, read, copy, write, allowlisted tool call |
+| Edge | 公开演示商店登录、排序、购物车、结账和收据核验 | PyAutoGUI、DOM |
+| Excel | 计算指标、标记审核状态、生成图表并通过独立 COM 会话验证 | PyAutoGUI、COM |
+| VS Code | 定位并逐一修复多个缺陷、反复运行测试 | PyAutoGUI、MCP、CLI、文件 API |
+| Explorer | 从混合收件箱筛选报告并制作可验证的发布产物 | PyAutoGUI、MCP、CLI、文件 API |
 
-These adapters are intentionally narrow. They are an auditable base for predefined demos, not a claim of
-general Windows autonomy.
+GUI Only 中，状态读取与定位仍可使用结构化接口，但**修改操作通过 PyAutoGUI 完成**；Hybrid 则让 Jev 在真实可用的 GUI 与结构化执行路线中选择。项目同时提供无密钥的 Rule 策略，用于测试和策略消融。Windows UIA、终端文本、文件系统等也是适配器可用的观察通道。
 
-## Quick start
+## 实验与展示
 
-Python 3.11+ is required. On Windows:
+[项目网页](https://gotchanni.github.io/Jev-CUA/)提供四个案例视频、两组分开的比较，以及可展开的执行记录：
+
+- **Jev Hybrid vs Jev GUI Only**：保持 Jev 策略与终态验证相同，比较动作空间对完成时间的影响。
+- **Jev Hybrid vs Codex Computer Use Hybrid**：两者都允许混合工具，比较实测墙钟时间和基于公开费率的模型美元成本估算。
+
+2026-09-23 的首批 v2 记录如下（秒；Jev 为已有成功记录的中位数，Codex 为每任务一次 pilot）：
+
+| 案例 | Jev Hybrid | Jev GUI Only | Codex Hybrid |
+|---|---:|---:|---:|
+| Edge | 79.5 | 87.4 | 77.4 |
+| Excel | 84.2 | 83.2 | 39.2 |
+| VS Code | 14.0 | 90.8 | 57.9 |
+| Explorer | 13.2 | 211.1 | 50.9 |
+
+VS Code 和 Explorer 展示了混合通道避开大量 GUI 操作的潜力；**Edge 与 Excel 的这批 Hybrid 运行实际上仍选择了 GUI，Excel 甚至略慢**。因此不能把这四行描述为“Jev 在所有任务上更快”。Codex 是通用工具代理，Jev 则使用预先构建的任务能力包；样本数也不足以形成通用速度排名。网站展示的美元数值是按 [TypeSafe 公开价格](https://docs.typesafe.ai/models)和 [OpenAI 公开费率](https://help.openai.com/en/articles/20001415-chatgpt-rate-card-enterprise-token-based-pricing)折算的**模型成本估计，不是实际账单**。方法、token 计数与限制见 [`benchmarks/v2-cost-pilot-2026-09-23.json`](benchmarks/v2-cost-pilot-2026-09-23.json)。
+
+网页是只读的公开实验快照，不连接 Jev API，也不运行用户电脑上的任务。案例视频是演示录制，表中耗时取自运行记录，而不是视频长度。Jev 展开的是代表性运行的逐步 trace；Codex 展开的是当时记录、按阶段合并的工具调用，不冒充一一对应的原子 GUI 动作。发布快照位于 [`website/snapshot.json`](website/snapshot.json)。
+
+## 快速开始
+
+需要 Windows 和 Python 3.11+。先体验不需要 Jev 密钥的 Rule 基线：
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev,windows,browser,mcp]"
+python -m pip install -e ".[dev,all,ui]"
 playwright install chromium
 cua-jev doctor
-pytest
-python scripts/windows_smoke.py
-```
-
-For the local read-only project showcase:
-
-```powershell
-python -m pip install -e ".[dev,all,ui]"
-$env:TYPESAFE_API_KEY = "your-key"  # omit when using the Rule baseline
-cua-jev-ui
-```
-
-Open `http://127.0.0.1:8768`. The page is deliberately a project introduction rather than an execution
-launcher. It introduces the framework first, then the four defined cases and two separate comparisons:
-Jev Hybrid versus Jev GUI Only for action-space efficiency, and Jev Hybrid versus Codex Hybrid for
-wall time plus model-cost USD. Benchmark values are read from real local run records; missing paired
-samples remain visibly unavailable rather than being estimated. Run history stays under `runs/ui/`, and the
-page never accepts or stores an API key.
-Each comparison row expands to a representative run: Jev steps come from the full decision/execution trace,
-while Codex shows only the grouped tool operations captured in its pilot record. The latter are not claimed
-to be one-to-one atomic actions.
-
-Experiments are launched explicitly from the CLI. **Hybrid Action Space** lets the selected policy choose both
-the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API route. **GUI Only** is the
-recordable action-space ablation: every mutation is performed visibly through PyAutoGUI. Jev and the
-deterministic Rule baseline can run against either action space, so policy and action space are not conflated.
-
-Codex is treated as an external non-Jev runner, not relabelled Rule behavior. A Codex Hybrid run may use
-browser automation, COM, CLI, filesystem tools and GUI actions; it should not be presented as GUI Only.
-After Codex runs the same task and passes the same terminal verifier, import its measured result through
-the local-only baseline contract. The first Codex measurements are pilot samples, not a statistically
-supported speed ranking: Jev uses prebuilt task capability packs, whereas Codex plans with general tools.
-The wall clock includes fixture setup, agent/tool time and terminal verification; explicit human approval
-waits are excluded and must be disclosed. Missing values stay unavailable rather than being estimated:
-
-```powershell
-$bootstrap = Invoke-RestMethod http://127.0.0.1:8768/api/bootstrap
-$body = @{
-  agent = "codex_computer_use"; task = "edge"; action_space = "hybrid"
-  success = $true; duration_ms = 42000; actions = 14
-  channels = @{ script = 14 }; verifier = "shared_terminal_verifier"
-} | ConvertTo-Json
-Invoke-RestMethod http://127.0.0.1:8768/api/baselines -Method Post `
-  -Headers @{ "X-CUA-JEV-CSRF" = $bootstrap.csrf } -ContentType "application/json" -Body $body
-```
-
-`scripts/codex_baseline_fixture.py` can prepare any v2 task in an isolated temporary workspace and invoke
-that task's existing terminal evaluator. It intentionally does not solve the task; Codex must perform the
-actions through its chosen tools. Its `verify` command checks the same final task predicate used by Jev.
-
-### Codex Hybrid pilot (2026-09-23)
-
-These are the first four **single-run** Codex Hybrid measurements against the frozen v2 tasks. The Jev
-column is the median of existing successful Hybrid runs, not a matched same-day trial. Every listed run
-passed the task's terminal evaluator.
-
-| Task | Jev Hybrid median | Jev model USD | Jev runs | Codex Hybrid wall time | Codex reference USD | Codex runs |
-|---|---:|---:|---:|---:|---:|---:|
-| Edge | 79.5 s | $0.00072 | 2/2 | 77.4 s | ~$0.257 | 1/1 |
-| Excel | 84.2 s | $0.00143 | 3/3 | 39.2 s | ~$0.071 | 1/1 |
-| VS Code | 14.0 s | $0.00362 | 2/2 | 57.9 s | ~$0.098 | 1/1 |
-| Explorer | 13.2 s | $0.00492 | 4/4 | 50.9 s | ~$0.106 | 1/1 |
-
-Jev USD is calculated from each successful trace's API-reported input tokens at the [published Jev 1.13
-rate](https://docs.typesafe.ai/models) of $0.042 per million; output is free. Codex USD is **a reference
-estimate, not an observed bill**: local `token_count` events for the four pilot windows are converted with
-OpenAI's [GPT-6 Sol Enterprise token-based USD rate card](https://help.openai.com/en/articles/20001415-chatgpt-rate-card-enterprise-token-based-pricing)
-($2/$0.20/$10 per million uncached input/cached input/output tokens at Standard speed). The corresponding
-[credit rates](https://learn.chatgpt.com/docs/pricing) are retained in the benchmark API, not foregrounded
-on the website. Actual costs vary by account, region, plan, agreement and speed mode; included
-subscription usage is not an incremental charge. The
-Codex pilot ran inside an existing long conversation, so its large, mostly cached context should not be
-interpreted as a fresh-task cost. The website foregrounds USD for readability; the benchmark API also
-exposes token counts, credits and sample coverage. These are model-inference estimates, excluding other
-infrastructure costs and any unreported failed Jev requests.
-The [published pilot counters](benchmarks/v2-cost-pilot-2026-09-23.json) make the USD calculation reproducible.
-
-Codex used a generic Playwright browser adapter for Edge, generic COM operations for Excel, and CLI/file
-tools for VS Code and Explorer. Its clock includes fixture setup, model/tool interaction and terminal
-verification. The 26.6 s spent waiting for human approval before the public demo checkout was excluded
-from Edge's 77.4 s. Codex had access to this repository's task specifications; Jev used its already-built
-capability packs. This pilot shows feasibility and exposes both wins and losses, **not** a general speed
-ranking or an isolated measurement of model response latency. In these stored Jev runs, Edge and Excel
-Hybrid selected GUI actions only; they do not demonstrate faster structured-route selection yet.
-
-Run the no-key deterministic demo:
-
-```powershell
 cua-jev demo --policy rule
-cua-jev episode-demo --policy rule
-cua-jev experiment --policy rule --episodes 10
-cua-jev tasks
-cua-jev suite --task all --policy rule
+cua-jev suite --task vscode --policy rule --profile adaptive --open-vscode
 ```
 
-It creates a small report under `demo-workspace/`, offers three equivalent read-only routes—typed filesystem
-API, MCP and allowlisted PowerShell—selects one, executes it and writes the complete trace to
-`runs/demo.jsonl`.
-
-`episode-demo` is a real sixteen-step publishing loop. It resets a mixed inbox, selects ten eligible reports,
-offers filesystem API, MCP and CLI routes, writes five release artifacts, then accepts completion only
-after independent byte-for-byte, checksum and exclusion checks. `experiment` repeats this resettable episode without
-dropping failures from the denominator.
-
-The complete suite command runs four multi-step, independently verified workflows:
-
-| Workflow | Required state transitions | Competing real routes |
-|---|---|---|
-| Edge long-horizon purchase | navigate, sign in, sort, add two products, validate cart, fill checkout, review and verify receipt (15 decisions) | PyAutoGUI in GUI Only; PyAutoGUI and live DOM in Hybrid |
-| Excel analysis delivery | compute seven KPIs, mark reviewed, create two charts, verify through fresh COM (11 decisions) | PyAutoGUI in GUI Only; PyAutoGUI and live COM in Hybrid |
-| VS Code diagnosis | run eight failing tests, repair one defect at a time through competing tools, rerun after every mutation, prove green (18 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
-| Explorer publishing | select ten final Q3 reports among draft, prior-quarter and private distractors, archive them, write five release artifacts (16 decisions) | PyAutoGUI in GUI Only; PyAutoGUI, MCP, filesystem API and CLI in Hybrid |
-
-These are not four fixed action scripts. At each state, the task builder offers every currently legal
-**intent × execution route** pair. For example, the initial Excel state can expose multiple candidates across
-ten pending subgoals and three backends; after one action, the remaining candidate set is rebuilt from the
-new workbook state. Jev therefore chooses both *what to do next* and *how to do it*.
-
-Use `--profile visible` for a recordable physical-GUI run. `--headed-edge`, `--open-vscode` and
-`--visible-apps` are added by the web console; when invoking the CLI directly, pass them explicitly. Every
-task is reset before each episode, and summary JSON plus per-task JSONL traces are written under `runs/`.
-
-```powershell
-cua-jev suite --task edge --policy rule --profile visible --headed-edge
-cua-jev suite --task excel --policy rule --profile visible --visible-apps
-cua-jev suite --task vscode --policy rule --profile visible --open-vscode
-cua-jev suite --task explorer --policy rule --profile visible --visible-apps
-```
-
-Use `--profile adaptive` for the visible multi-action-space system. Add `--policy-fallback` when a demo
-should finish through a transparently traced Rule fallback during transient Jev network outages:
-
-```powershell
-cua-jev suite --task all --policy jev --profile adaptive --policy-fallback `
-  --headed-edge --open-vscode --visible-apps
-```
-
-The Edge GUI-only run deliberately targets the public `https://www.saucedemo.com/` site. The bundled HTML
-page remains only as a deterministic regression fixture for the hybrid evaluation profile; it is not used
-by the public demo.
-
-To run the same candidates through real Jev:
-
-```powershell
-$env:TYPESAFE_API_KEY = "your-key"
-cua-jev demo --policy jev
-cua-jev suite --task all --policy jev
-cua-jev suite --task all --policy jev --profile visible --headed-edge --open-vscode --visible-apps
-```
-
-For repeatable v2 paired experiments and publishable screen recordings, keep the key in the ignored local
-`.env`, install the recording extra, and run the recorder. It executes the same Jev policy once against
-`Hybrid Action Space` and once against `GUI Only` for every suite, writes benchmark-compatible records under
-`runs/ui/`, and saves H.264 videos with a live route HUD under `artifacts/demos/`:
+调用 Jev 时，把密钥写入本机被 Git 忽略的 `.env`，**不要提交密钥**：
 
 ```powershell
 Copy-Item .env.example .env
-# Edit .env and set TYPESAFE_API_KEY locally; it is ignored by Git.
+# 在 .env 中设置 TYPESAFE_API_KEY=...
+cua-jev jev-smoke
+cua-jev suite --task vscode --policy jev --profile adaptive --open-vscode
+```
+
+完整任务可用 `--task edge|excel|vscode|explorer|all`。`--profile adaptive` 是 Hybrid；`--profile visible` 为 GUI Only。Edge 可加 `--headed-edge`，Excel/Explorer 可加 `--visible-apps`。公开商店案例使用 [SauceDemo](https://www.saucedemo.com/) 测试账号与演示订单，不涉及真实付款。
+
+本地只读展示页：
+
+```powershell
+cua-jev-ui
+# http://127.0.0.1:8768
+```
+
+可重复的配对实验和录制：
+
+```powershell
 python -m pip install -e ".[all,ui,recording]"
 python scripts/record_v2_demos.py --task all --profile both --policy jev
 ```
 
-Use `--samples 3` to collect three paired samples while recording only the first run of each condition. The
-showcase automatically exposes available `Hybrid` and `GUI Only` videos on the corresponding case card.
-Recordings do not autoplay, and all measurements still come from the JSONL trace rather than video duration.
+本地运行记录保存在被忽略的 `runs/`，原始视频保存在被忽略的 `artifacts/demos/`。公开网页只使用经过审核的 `website/media/` 副本。CI 可在 Linux 上执行单元测试，但四个真实桌面案例需要 Windows 环境。
 
-Validate only the API decision path, or repeat the frozen task for reliability measurements:
+## 扩展一个新任务
+
+1. **定义任务状态与终态条件**：实现观察器，输出尽量简洁、稳定、可验证的结构化状态；参考 [`observers.py`](src/cua_jev/observers.py) 与 [`suites.py`](src/cua_jev/suites.py)。
+2. **枚举真实候选动作**：为每个当前合法的 `意图 × 通道` 构建 [`ActionCandidate`](src/cua_jev/models.py)，提供稳定 ID、能力名、参数、风险级别与验证器。不要把不可执行的路线当作候选来“凑多样性”。
+3. **注册能力与执行器**：参考 [`capabilities.py`](src/cua_jev/capabilities.py) 和 [`registry.py`](src/cua_jev/registry.py)，让 GUI/DOM/COM/CLI/MCP/API 等通道映射到真正的工具调用。CLI 只允许注册的 argv 模板，不使用任意 `shell=True` 命令。
+4. **实现独立验证与复位**：验证实际状态变化，定义任务成功谓词和可重复的 reset；为失败、重复动作、拒绝执行等情况补测试。参考 [`verify.py`](src/cua_jev/verify.py) 与 [`tests/`](tests/)。
+5. **评测再发布**：同时跑 Hybrid 与 GUI Only，记录成功率、墙钟时间、决策时间、动作通道分布、回退和拒绝；不要只展示最佳一次运行。
+
+最小的 JSON 任务示例在 [`inspect_report.json`](src/cua_jev/predefined/inspect_report.json)。它适合学习候选动作契约；真正的应用扩展还需要动态观察、执行器和终态验证器。
+
+## Roadmap
+
+- [x] Jev `choice` 接入、类型化候选、统一运行时、guard、回执和 JSONL trace。
+- [x] GUI / DOM / COM / CLI / MCP / API 多通道执行接口；无密钥 Rule 基线。
+- [x] 四个 Windows 定义任务、独立终态验证、Hybrid / GUI Only 配对实验与 Codex Hybrid pilot。
+- [x] 只读项目网页、脱敏实验快照、真实视频与可展开执行步骤。
+- [ ] 从四个冻结案例扩展到参数化任务族、未见过的实例和足量重复试验；公布失败案例与置信区间。
+- [ ] 把任务适配器做得更通用：跨软件、跨任务，逐步扩展到 macOS / Linux 与更多浏览器/办公应用。
+- [ ] 增加可选的 VLM/视觉感知回退，用于 DOM、UIA、COM 不能可靠描述的界面；保持当前无 VLM 路径可用。
+- [ ] 与通用 CUA / LLM 模型分工：让大模型处理开放式目标理解和新能力构建，让 Jev 承担可约束的高频选择，以任务成功率、延迟和成本共同优化路由。
+- [ ] 完善跨通道失败恢复、动态 MCP 服务接入、安全确认与长期回归基准。
+
+## 网页如何发布
+
+GitHub Pages 使用 [`pages.yml`](.github/workflows/pages.yml) 从 `main` 构建只读站点。它**只读取仓库里经过审阅的 `website/snapshot.json` 和 `website/media/`**，不会把本机 `runs/`、`.env` 或原始视频上传。新增实验后，在本机核查数据和视频，再执行：
 
 ```powershell
-cua-jev jev-smoke
-cua-jev benchmark --policy jev --episodes 10
+python scripts/build_pages.py --refresh-snapshot
+python scripts/prepare_public_demos.py
+python scripts/build_pages.py --build
 ```
 
-Never commit the key. `.env` files, traces and demo workspaces are ignored. The client sends credentials only
-in the HTTPS Authorization header and never stores the key in a trace or exception.
+审阅 `website/` 的差异，确认无个人信息后提交推送。若仓库尚未启用 Pages，需要在 GitHub 仓库 **Settings → Pages → Build and deployment** 选择 **GitHub Actions**；之后 `main` 更新会自动部署到上面的网页地址。[GitHub 官方部署说明](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
 
-## Edge DOM setup
+## 安全与许可
 
-CUA-JEV attaches only to a browser instance that the user explicitly starts with CDP enabled. Close existing
-Edge instances or use a separate profile, then run:
+`ActionGuard` 对候选身份、过期观察、允许根目录、写入和外部副作用执行 fail-closed 检查。Excel 不运行 VBA；MCP 只能调用已注册的类型化工具。成功回执不是终态成功，必须由任务验证器确认。API 密钥只用于本地 HTTPS 请求，不写入 trace、网页快照或 Git 仓库。
 
-```powershell
-msedge.exe --remote-debugging-port=9222 --user-data-dir="$PWD\.edge-cua-profile"
-```
-
-The adapter defaults to `http://127.0.0.1:9222`. It does not launch or silently attach to a personal browser
-profile.
-
-## Safety contract
-
-Actions are denied before execution unless all checks pass:
-
-1. the decision references the current observation and one offered candidate;
-2. the observation has not already been consumed;
-3. every path stays under an explicitly allowed root;
-4. local writes are enabled for that run;
-5. destructive/external actions and confirmation-gated actions are explicitly authorized;
-6. an executor exists for the selected channel.
-
-CLI execution accepts only registered factories that return an argv list and always runs with `shell=False`.
-Excel execution never runs VBA. MCP calls must be registered as typed tools. A successful executor receipt is
-not enough for important tasks; add a state-based verifier such as `file.exists`, `file.contains`, a DOM
-predicate or an Excel workbook predicate.
-
-## Writing a predefined task
-
-Tasks are JSON documents containing one structured observation and a list of complete action candidates.
-The included example is
-[`inspect_report.json`](src/cua_jev/predefined/inspect_report.json).
-
-```json
-{
-  "name": "inspect_report",
-  "description": "Inspect a report without changing it.",
-  "subgoal": "Read it through one available channel.",
-  "state": {"constraints": ["read_only"]},
-  "candidates": [
-    {
-      "id": "api_read",
-      "channel": "api",
-      "capability": "filesystem.read_text",
-      "description": "Read through the typed filesystem API.",
-      "arguments": {"path": "${REPORT}"},
-      "risk": "read_only",
-      "verifier": "receipt.success"
-    }
-  ]
-}
-```
-
-Candidate IDs and capability names are machine contracts. Descriptions and the structured state give Jev the
-semantics needed to choose. Executors never trust descriptions as executable instructions.
-
-## Evaluation plan
-
-The first experiments should keep observations, candidates, guards and executors fixed and compare:
-
-| Policy | Channels | Purpose |
-|---|---|---|
-| rule baseline | hybrid | deterministic lower bound |
-| general LLM choice | hybrid | expensive decision baseline |
-| Jev choice | hybrid | primary system |
-| general LLM / Jev | GUI only | fair comparison with conventional CUA |
-
-Record task success, verifier success, decision latency, end-to-end time, action count, channel distribution,
-fallbacks, guard rejections and API usage. Do not interpret Jev action probabilities as calibrated task-success
-probabilities.
-
-## Scope and roadmap
-
-The first release focuses on the action router, multi-route execution contract and a dense local experiment console. Next
-milestones are:
-
-1. replace the in-process demo MCP tools with configurable remote MCP servers;
-2. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
-3. add cross-route executor retry and richer DOM/UIA/Excel predicates;
-4. grow from four workflows into parameterized task families with held-out instances;
-5. add an optional VLM fallback only for observations that DOM/UIA/COM cannot resolve.
-
-## Honest first-release boundary
-
-The four representative suites are executable today, but they are deliberately frozen fixtures rather than
-open-ended desktop tasks. CUA-JEV targets predefined tasks with structured DOM, UIA, COM, terminal and
-filesystem state. It does not understand arbitrary screenshots, generate arbitrary shell commands, recover
-from every application dialog, or claim general Windows autonomy.
-
-Apache-2.0 licensed.
-
-The console uses the official ZJU-REAL mark and Qiushi eagle assets from
-[zjureal.com](https://zjureal.com/). Their inclusion identifies the lab project and does not change the
-repository's code license.
+代码以 [Apache-2.0](LICENSE) 发布。ZJU-REAL 标识用于表明实验室项目身份，不改变第三方品牌素材的权利归属；应用图标的来源见 [`ATTRIBUTION.md`](src/cua_jev/ui/static/icons/ATTRIBUTION.md)。

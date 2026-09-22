@@ -1,0 +1,1242 @@
+{
+  "schema_version": 1,
+  "captured_on": "2026-09-23",
+  "tasks": {
+    "edge": {
+      "title": "Edge checkout workflow",
+      "description": "Sign in to a public store, sort products, build a two-item cart, complete checkout, and verify the receipt.",
+      "steps": 15,
+      "hybrid_routes": [
+        "PyAutoGUI · Edge",
+        "Playwright DOM",
+        "DOM Verify"
+      ]
+    },
+    "excel": {
+      "title": "Excel analysis delivery",
+      "description": "Compute seven business metrics, mark review status, build two charts, and verify the workbook in an independent COM session.",
+      "steps": 11,
+      "hybrid_routes": [
+        "PyAutoGUI · Excel",
+        "Live Excel COM",
+        "COM Verify"
+      ]
+    },
+    "vscode": {
+      "title": "VS Code defect repair",
+      "description": "Diagnose eight independent defects, choose the repair order and action channel, and rerun regression tests after each change.",
+      "steps": 18,
+      "hybrid_routes": [
+        "PyAutoGUI",
+        "MCP",
+        "Filesystem API",
+        "Allowlisted CLI"
+      ]
+    },
+    "explorer": {
+      "title": "Explorer release pipeline",
+      "description": "Select ten eligible reports from a mixed inbox, exclude sensitive material, and produce five verified release artifacts.",
+      "steps": 16,
+      "hybrid_routes": [
+        "PyAutoGUI",
+        "MCP",
+        "Filesystem API",
+        "Allowlisted CLI"
+      ]
+    }
+  },
+  "benchmarks": {
+    "edge": {
+      "rows": [
+        {
+          "agent": "codex_computer_use",
+          "action_space": "hybrid",
+          "representative_run_id": "external-20260923-042733-b7356f",
+          "median_wall_time_ms": 77368.0,
+          "median_model_cost_usd": null,
+          "median_reference_cost_usd": 0.2571912
+        },
+        {
+          "agent": "jev",
+          "action_space": "gui_only",
+          "representative_run_id": "20260923-005547-853157",
+          "median_wall_time_ms": 87425.3580570221,
+          "median_model_cost_usd": 0.0006171480000000001,
+          "median_reference_cost_usd": null
+        },
+        {
+          "agent": "jev",
+          "action_space": "hybrid",
+          "representative_run_id": "20260923-005424-a94f22",
+          "median_wall_time_ms": 79458.23693275452,
+          "median_model_cost_usd": 0.0007176330000000001,
+          "median_reference_cost_usd": null
+        }
+      ]
+    },
+    "excel": {
+      "rows": [
+        {
+          "agent": "codex_computer_use",
+          "action_space": "hybrid",
+          "representative_run_id": "external-20260923-042733-1bfec5",
+          "median_wall_time_ms": 39168.0,
+          "median_model_cost_usd": null,
+          "median_reference_cost_usd": 0.070662
+        },
+        {
+          "agent": "jev",
+          "action_space": "gui_only",
+          "representative_run_id": "20260923-005901-7f4c68",
+          "median_wall_time_ms": 83187.42060661316,
+          "median_model_cost_usd": 0.000933828,
+          "median_reference_cost_usd": null
+        },
+        {
+          "agent": "jev",
+          "action_space": "hybrid",
+          "representative_run_id": "20260923-014425-376a4a",
+          "median_wall_time_ms": 84186.87558174133,
+          "median_model_cost_usd": 0.001425606,
+          "median_reference_cost_usd": null
+        }
+      ]
+    },
+    "vscode": {
+      "rows": [
+        {
+          "agent": "codex_computer_use",
+          "action_space": "hybrid",
+          "representative_run_id": "external-20260923-042733-761ea2",
+          "median_wall_time_ms": 57928.0,
+          "median_model_cost_usd": null,
+          "median_reference_cost_usd": 0.0979768
+        },
+        {
+          "agent": "jev",
+          "action_space": "gui_only",
+          "representative_run_id": "20260923-010045-1bdcef",
+          "median_wall_time_ms": 90839.12992477417,
+          "median_model_cost_usd": 0.001573152,
+          "median_reference_cost_usd": null
+        },
+        {
+          "agent": "jev",
+          "action_space": "hybrid",
+          "representative_run_id": "20260923-010029-3a5fe2",
+          "median_wall_time_ms": 14005.125999450684,
+          "median_model_cost_usd": 0.0036231930000000002,
+          "median_reference_cost_usd": null
+        }
+      ]
+    },
+    "explorer": {
+      "rows": [
+        {
+          "agent": "codex_computer_use",
+          "action_space": "hybrid",
+          "representative_run_id": "external-20260923-042733-5556db",
+          "median_wall_time_ms": 50890.0,
+          "median_model_cost_usd": null,
+          "median_reference_cost_usd": 0.1061924
+        },
+        {
+          "agent": "jev",
+          "action_space": "gui_only",
+          "representative_run_id": "20260923-012439-645cf3",
+          "median_wall_time_ms": 211130.1646232605,
+          "median_model_cost_usd": 0.0019924170000000002,
+          "median_reference_cost_usd": null
+        },
+        {
+          "agent": "jev",
+          "action_space": "hybrid",
+          "representative_run_id": "20260923-020058-b52e9f",
+          "median_wall_time_ms": 13203.823566436768,
+          "median_model_cost_usd": 0.00492135,
+          "median_reference_cost_usd": null
+        }
+      ]
+    }
+  },
+  "steps": {
+    "external-20260923-042733-b7356f": {
+      "run_id": "external-20260923-042733-b7356f",
+      "source": "recorded_tool_batches",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Open the public SauceDemo store",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 2,
+          "title": "Inspect the sign-in form",
+          "channel": "dom",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 3,
+          "title": "Enter demo credentials and sign in",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 4,
+          "title": "Inspect the inventory page",
+          "channel": "dom",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 5,
+          "title": "Sort products, add two items, and open the cart",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 6,
+          "title": "Inspect the cart before checkout",
+          "channel": "dom",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 7,
+          "title": "Enter checkout details and continue",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 8,
+          "title": "Review the order overview",
+          "channel": "dom",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 9,
+          "title": "Submit the demonstration order",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 10,
+          "title": "Verify the checkout receipt",
+          "channel": "verification",
+          "capability": null,
+          "verified": true
+        }
+      ]
+    },
+    "20260923-005547-853157": {
+      "run_id": "20260923-005547-853157",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Navigate the visible Edge address bar to the public SauceDemo store.",
+          "channel": "gui",
+          "capability": "edge.navigate",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Enter the public SauceDemo standard user through physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Enter the documented SauceDemo password through physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Click the visible sign-in button with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Sort the live product list from low to high with mouse and keyboard.",
+          "channel": "gui",
+          "capability": "edge.select_low_to_high",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Add Sauce Labs Backpack to the cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Add Sauce Labs Bike Light to the cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Open the visible shopping cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Start checkout from the validated cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Enter checkout field first_name with physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Enter checkout field last_name with physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 12,
+          "title": "Enter checkout field postal_code with physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 13,
+          "title": "Continue from the checkout form with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 14,
+          "title": "Finish the reviewed order with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 15,
+          "title": "Declare completion only after the live checkout receipt is visible.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    },
+    "20260923-005424-a94f22": {
+      "run_id": "20260923-005424-a94f22",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Navigate the visible Edge address bar to the public SauceDemo store.",
+          "channel": "gui",
+          "capability": "edge.navigate",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Enter the public SauceDemo standard user through physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Enter the documented SauceDemo password through physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Click the visible sign-in button with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Sort the live product list from low to high with mouse and keyboard.",
+          "channel": "gui",
+          "capability": "edge.select_low_to_high",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Add Sauce Labs Backpack to the cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Add Sauce Labs Bike Light to the cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Open the visible shopping cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Start checkout from the validated cart with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Enter checkout field first_name with physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Enter checkout field last_name with physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 12,
+          "title": "Enter checkout field postal_code with physical keyboard input.",
+          "channel": "gui",
+          "capability": "edge.fill",
+          "verified": true
+        },
+        {
+          "number": 13,
+          "title": "Continue from the checkout form with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 14,
+          "title": "Finish the reviewed order with the physical mouse.",
+          "channel": "gui",
+          "capability": "edge.click",
+          "verified": true
+        },
+        {
+          "number": 15,
+          "title": "Declare completion only after the live checkout receipt is visible.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    },
+    "external-20260923-042733-1bfec5": {
+      "run_id": "external-20260923-042733-1bfec5",
+      "source": "recorded_tool_batches",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Observe workbook data and Summary layout",
+          "channel": "com",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 2,
+          "title": "Write seven metrics and review status to Summary cells",
+          "channel": "com",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 3,
+          "title": "Create two charts and save the workbook",
+          "channel": "com",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 4,
+          "title": "Run the independent workbook verifier",
+          "channel": "verification",
+          "capability": null,
+          "verified": true
+        }
+      ]
+    },
+    "20260923-005901-7f4c68": {
+      "run_id": "20260923-005901-7f4c68",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Complete calculate_total in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Complete calculate_average in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Complete find_maximum in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Complete count_products in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Complete find_minimum in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Complete total_units in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Complete average_revenue_per_unit in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Create the chart in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.create_chart",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Create the units chart in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.create_chart",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Complete mark_reviewed in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Declare completion after workbook inspection.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    },
+    "20260923-014425-376a4a": {
+      "run_id": "20260923-014425-376a4a",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Complete calculate_total in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Complete calculate_average in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Complete find_maximum in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Complete count_products in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Complete find_minimum in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Complete total_units in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Complete average_revenue_per_unit in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Complete mark_reviewed in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.write_range",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Create the chart in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.create_chart",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Create the units chart in a visible Excel window.",
+          "channel": "gui",
+          "capability": "excel.create_chart",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Declare completion after workbook inspection.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    },
+    "external-20260923-042733-761ea2": {
+      "run_id": "external-20260923-042733-761ea2",
+      "source": "recorded_tool_batches",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Inspect source code and run the failing unit tests",
+          "channel": "cli",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 2,
+          "title": "Attempt the first source repair and rerun tests",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 3,
+          "title": "Apply corrected repairs and rerun regression tests",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 4,
+          "title": "Run the independent source and test verifier",
+          "channel": "verification",
+          "capability": null,
+          "verified": true
+        }
+      ]
+    },
+    "20260923-010045-1bdcef": {
+      "run_id": "20260923-010045-1bdcef",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Repair repair_addition visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Repair repair_multiplication visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Repair repair_subtraction visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Repair repair_division visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Repair repair_maximum visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 12,
+          "title": "Repair repair_minimum visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 13,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 14,
+          "title": "Repair repair_clamp visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 15,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 16,
+          "title": "Repair repair_percentage visibly in the VS Code editor.",
+          "channel": "gui",
+          "capability": "vscode.uia_replace_line",
+          "verified": true
+        },
+        {
+          "number": 17,
+          "title": "Run the unit tests visibly in the VS Code integrated terminal.",
+          "channel": "gui",
+          "capability": "vscode.screen_run_tests",
+          "verified": true
+        },
+        {
+          "number": 18,
+          "title": "Declare completion only after both tests pass.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    },
+    "20260923-010029-3a5fe2": {
+      "run_id": "20260923-010029-3a5fe2",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Repair repair_addition through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Repair repair_multiplication through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Repair repair_subtraction through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Repair repair_division through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Repair repair_maximum through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 12,
+          "title": "Repair repair_minimum through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 13,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 14,
+          "title": "Repair repair_clamp through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 15,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 16,
+          "title": "Repair repair_percentage through an argv-only exact patch.",
+          "channel": "cli",
+          "capability": "cli.replace_exact",
+          "verified": true
+        },
+        {
+          "number": 17,
+          "title": "Run the unit tests through the allowlisted process executor.",
+          "channel": "script",
+          "capability": "tests.run",
+          "verified": true
+        },
+        {
+          "number": 18,
+          "title": "Declare completion only after both tests pass.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    },
+    "external-20260923-042733-5556db": {
+      "run_id": "external-20260923-042733-5556db",
+      "source": "recorded_tool_batches",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Inspect reports in the mixed inbox",
+          "channel": "cli",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 2,
+          "title": "Filter eligible final Q3 reports and copy them to the archive",
+          "channel": "cli",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 3,
+          "title": "Generate five release artifacts from the selected reports",
+          "channel": "script",
+          "capability": null,
+          "verified": false
+        },
+        {
+          "number": 4,
+          "title": "Run the independent release-artifact verifier",
+          "channel": "verification",
+          "capability": null,
+          "verified": true
+        }
+      ]
+    },
+    "20260923-012439-645cf3": {
+      "run_id": "20260923-012439-645cf3",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Archive the sales report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Archive the compliance report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Archive the inventory report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Archive the support report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Archive the operations report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Archive the marketing report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Archive the finance report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Archive the security report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Archive the reliability report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Archive the customer-success report visibly in Windows Explorer.",
+          "channel": "gui",
+          "capability": "explorer.uia_copy",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Create manifest.txt visibly in Notepad.",
+          "channel": "gui",
+          "capability": "notepad.screen_write_text",
+          "verified": true
+        },
+        {
+          "number": 12,
+          "title": "Create release-note.txt visibly in Notepad.",
+          "channel": "gui",
+          "capability": "notepad.screen_write_text",
+          "verified": true
+        },
+        {
+          "number": 13,
+          "title": "Create checksums.txt visibly in Notepad.",
+          "channel": "gui",
+          "capability": "notepad.screen_write_text",
+          "verified": true
+        },
+        {
+          "number": 14,
+          "title": "Create publication-index.txt visibly in Notepad.",
+          "channel": "gui",
+          "capability": "notepad.screen_write_text",
+          "verified": true
+        },
+        {
+          "number": 15,
+          "title": "Create audit-record.txt visibly in Notepad.",
+          "channel": "gui",
+          "capability": "notepad.screen_write_text",
+          "verified": true
+        },
+        {
+          "number": 16,
+          "title": "Declare completion after manifest and byte-level verification.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    },
+    "20260923-020058-b52e9f": {
+      "run_id": "20260923-020058-b52e9f",
+      "source": "jev_run_trace",
+      "terminal_verified": true,
+      "steps": [
+        {
+          "number": 1,
+          "title": "Archive the sales report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "title": "Archive the inventory report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "title": "Archive the support report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "title": "Archive the operations report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "title": "Archive the compliance report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "title": "Archive the marketing report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "title": "Archive the finance report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 8,
+          "title": "Archive the security report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 9,
+          "title": "Archive the reliability report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "title": "Archive the customer-success report through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.copy",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "title": "Write manifest.txt through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 12,
+          "title": "Write release-note.txt through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 13,
+          "title": "Write checksums.txt through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 14,
+          "title": "Write publication-index.txt through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 15,
+          "title": "Write audit-record.txt through MCP.",
+          "channel": "mcp",
+          "capability": "mcp.filesystem.write_text",
+          "verified": true
+        },
+        {
+          "number": 16,
+          "title": "Declare completion after manifest and byte-level verification.",
+          "channel": "control",
+          "capability": "control.done",
+          "verified": true
+        }
+      ]
+    }
+  }
+}

@@ -6,6 +6,17 @@ let tasks = {};
 let demos = {};
 let selectedTask = "edge";
 let benchmarkRequest = 0;
+const staticSite = document.documentElement.dataset.siteMode === "static";
+
+function dataURL(url) {
+  if (!staticSite) return url;
+  if (url === "/api/bootstrap") return "data/bootstrap.json";
+  const benchmark = url.match(/^\/api\/benchmarks\?task=([a-z]+)$/);
+  if (benchmark) return `data/benchmarks/${benchmark[1]}.json`;
+  const steps = url.match(/^\/api\/runs\/([a-zA-Z0-9-]+)\/steps$/);
+  if (steps) return `data/steps/${steps[1]}.json`;
+  throw new Error("This request is not part of the published read-only snapshot.");
+}
 
 const caseMeta = {
   edge: { app: "EDGE", className: "edge", summary: "Public store checkout", stages: "Sign in · sort · cart · checkout · receipt" },
@@ -49,7 +60,7 @@ async function getJSON(url, retries = 0) {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      const response = await fetch(url, { cache: "no-store" });
+      const response = await fetch(dataURL(url), { cache: staticSite ? "default" : "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
       return data;
@@ -62,7 +73,7 @@ async function getJSON(url, retries = 0) {
 }
 
 function appIcon(id) {
-  return `<img src="/static/icons/${escapeHTML(id)}.svg" width="28" height="28" alt="">`;
+  return `<img src="static/icons/${escapeHTML(id)}.svg" width="28" height="28" alt="">`;
 }
 
 function renderLoopStep(id) {
