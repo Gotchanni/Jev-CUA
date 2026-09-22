@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -165,6 +166,9 @@ class EpisodeRunner:
         counts = Counter(str(step.receipt.channel) for step in history)
         result = EpisodeResult(environment.name, status, reason, tuple(history), started, ended, dict(counts))
         runtime.trace.append("episode", result.to_dict())
+        completion_hold = _completion_hold_seconds()
+        if completion_hold:
+            time.sleep(completion_hold)
         close = getattr(runtime.policy, "close", None)
         if close:
             close()
@@ -196,3 +200,12 @@ class EpisodeRunner:
             for step in history[-8:]
         ]
         return replace(observation, state={**observation.state, "recent_actions": recent})
+
+
+def _completion_hold_seconds() -> float:
+    """Keep visible apps alive briefly so demo recorders can capture terminal state."""
+    raw = os.getenv("CUA_JEV_COMPLETION_HOLD_SECONDS", "0")
+    try:
+        return min(max(float(raw), 0.0), 5.0)
+    except ValueError:
+        return 0.0

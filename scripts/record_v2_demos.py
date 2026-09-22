@@ -157,6 +157,8 @@ def run_one(
     fps: int,
     max_width: int,
     tail_seconds: float,
+    completion_hold_seconds: float,
+    completion_card_seconds: float,
 ) -> dict[str, Any]:
     state: dict[str, Any] = {
         "task": task,
@@ -170,15 +172,24 @@ def run_one(
     recorder = DesktopRecorder(output, state, fps=fps, max_width=max_width) if output else None
     recorder_started = False
     try:
-        record = manager.create(
-            {
-                "task": task,
-                "policy": policy,
-                "visible_desktop": True,
-                "execution_profile": profile,
-                "policy_fallback": fallback,
-            }
-        )
+        hold_env = "CUA_JEV_COMPLETION_HOLD_SECONDS"
+        previous_hold = os.environ.get(hold_env)
+        os.environ[hold_env] = str(completion_hold_seconds if recorder else 0.0)
+        try:
+            record = manager.create(
+                {
+                    "task": task,
+                    "policy": policy,
+                    "visible_desktop": True,
+                    "execution_profile": profile,
+                    "policy_fallback": fallback,
+                }
+            )
+        finally:
+            if previous_hold is None:
+                os.environ.pop(hold_env, None)
+            else:
+                os.environ[hold_env] = previous_hold
         print(f"[{task}/{profile}] run={record['id']} started", flush=True)
         while True:
             detail = manager.detail(record["id"])
@@ -189,6 +200,16 @@ def run_one(
                 recorder.start()
                 recorder_started = True
                 time.sleep(0.25)
+            if (
+                recorder
+                and recorder_started
+                and state["step"] >= state["total"]
+                and detail["status"] == "running"
+            ):
+                time.sleep(completion_card_seconds)
+                recorder.stop()
+                recorder_started = False
+                recorder = None
             if detail["status"] != "running":
                 break
             time.sleep(0.25)
@@ -223,9 +244,13 @@ def main() -> int:
     parser.add_argument("--fps", type=int, default=12)
     parser.add_argument("--max-width", type=int, default=1920)
     parser.add_argument("--tail-seconds", type=float, default=1.5)
+    parser.add_argument("--completion-hold-seconds", type=float, default=1.25)
+    parser.add_argument("--completion-card-seconds", type=float, default=0.6)
     args = parser.parse_args()
     if args.samples < 1:
         parser.error("--samples must be positive")
+    if min(args.tail_seconds, args.completion_hold_seconds, args.completion_card_seconds) < 0:
+        parser.error("recording delays must not be negative")
 
     root = Path(__file__).resolve().parents[1]
     load_local_env(root / ".env")
@@ -255,6 +280,8 @@ def main() -> int:
                         fps=args.fps,
                         max_width=args.max_width,
                         tail_seconds=args.tail_seconds,
+                        completion_hold_seconds=args.completion_hold_seconds,
+                        completion_card_seconds=args.completion_card_seconds,
                     )
                 )
     output_dir.mkdir(parents=True, exist_ok=True)
