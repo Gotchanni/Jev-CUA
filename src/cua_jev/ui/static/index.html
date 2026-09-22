@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CUA-JEV 本地混合动作路由实验控制台">
+  <title>CUA-JEV Console · ZJU REAL Lab</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo-mark.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/static/logo-mark.svg" alt="ZJU-REAL 标志">
+        <div><strong>CUA–JEV</strong><span>REAL Lab · ZJU</span></div>
+      </div>
+      <p class="nav-caption">WORKSPACE</p>
+      <nav aria-label="页面导航">
+        <a class="active" href="#console"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>实验控制台</a>
+        <a href="#evidence"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>决策证据</a>
+        <a href="#history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M4 12a8 8 0 1 0 2-5.3L4 9V4h5"/></svg>运行记录</a>
+      </nav>
+      <div class="runtime-card">
+        <div class="runtime-head"><span>本机运行时</span><i id="runtime-dot"></i></div>
+        <dl><div><dt>Jev API</dt><dd id="key-state">检查中</dd></div><div><dt>Executor</dt><dd>Windows</dd></div><div><dt>状态</dt><dd id="runtime-state">空闲</dd></div></dl>
+      </div>
+      <div class="lab-mark"><img src="/static/qiushi-eagle.svg" alt="浙江大学求是鹰标志"><span>Reasoning · Embodied<br>Agentic · Lifelong AI</span></div>
+    </aside>
+
+    <main id="main">
+      <header class="page-head" id="console">
+        <div><p class="eyebrow">LOCAL EXPERIMENT CONSOLE</p><h1>让 Jev 在真实可执行路线中做选择。</h1><p>同一子目标，多条通道；每次执行都留下决策概率、Guard 回执和独立验证。</p></div>
+        <div class="status-pill"><i></i><span id="header-status">Ready</span></div>
+      </header>
+
+      <section class="workspace-grid">
+        <article class="panel task-panel">
+          <div class="panel-head"><div><small>01 / TASK</small><h2>选择代表性任务</h2></div><span id="task-count">4 suites</span></div>
+          <div id="task-grid" class="task-grid" role="radiogroup" aria-label="任务"></div>
+        </article>
+
+        <article class="panel run-panel">
+          <div class="panel-head"><div><small>02 / POLICY</small><h2>运行配置</h2></div><span>one episode</span></div>
+          <fieldset class="segmented"><legend>决策策略</legend><label><input type="radio" name="policy" value="jev" checked><span>Jev</span></label><label><input type="radio" name="policy" value="rule"><span>Rule baseline</span></label></fieldset>
+          <div class="run-options"><label><input id="headed-edge" type="checkbox" checked><span><b>显示 Edge</b><small>用于录制 DOM 动作</small></span></label><label><input id="open-vscode" type="checkbox" checked><span><b>打开 VS Code</b><small>展示修复上下文</small></span></label></div>
+          <div class="route-summary"><span>候选路线</span><div id="selected-routes"></div></div>
+          <button id="run-button" class="primary-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg><span>启动实验</span></button>
+          <button id="stop-button" class="stop-button" hidden>停止当前实验</button>
+          <p id="action-error" class="error" role="alert"></p>
+        </article>
+
+        <article class="panel live-panel">
+          <div class="panel-head"><div><small>03 / LIVE TRACE</small><h2>闭环时间线</h2></div><span id="event-count">0 events</span></div>
+          <div id="live-empty" class="empty-state"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17h3l2-7 4 10 2-6h5"/></svg><b>等待一次实验</b><span>Observation、Decision、Receipt 与 Verification 会在这里逐步出现。</span></div>
+          <ol id="timeline" class="timeline" aria-live="polite"></ol>
+        </article>
+      </section>
+
+      <section class="evidence-section" id="evidence">
+        <div class="section-title"><div><p class="eyebrow">DECISION EVIDENCE</p><h2>不是只看成功，而是看为什么这样走。</h2></div><div id="run-metrics" class="metric-strip"></div></div>
+        <div class="evidence-grid">
+          <article class="panel"><div class="panel-head"><div><small>CANDIDATES</small><h3>最近一次路线选择</h3></div></div><div id="candidate-board" class="candidate-board"><p class="muted">运行后显示候选动作与概率。</p></div></article>
+          <article class="panel"><div class="panel-head"><div><small>VERIFIER</small><h3>终态证据</h3></div></div><div id="verification-board" class="verification-board"><p class="muted">独立验证结果会出现在这里。</p></div></article>
+        </div>
+      </section>
+
+      <section class="history-section" id="history">
+        <div class="section-title"><div><p class="eyebrow">RUN ARCHIVE</p><h2>本机实验记录</h2></div><span>保存在 runs/ui，不上传任何密钥</span></div>
+        <div class="panel table-panel"><table><thead><tr><th>运行</th><th>任务</th><th>策略</th><th>状态</th><th>路线</th><th>结果</th></tr></thead><tbody id="history-body"></tbody></table></div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

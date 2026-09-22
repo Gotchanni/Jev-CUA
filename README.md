@@ -36,6 +36,8 @@ The shared runtime is functional and covered by tests:
 - dynamic observer and capability-pack registries rather than only hard-coded action lists;
 - strict TypeSafe Jev `choice` client with response validation, retries and credential redaction;
 - composite `ActionCandidate` objects across GUI, CLI, MCP, script/API and control channels;
+- multiple executable routes for the same subgoal, so Jev chooses between real alternatives rather than
+  differently worded placeholders;
 - fail-closed guard for stale decisions, replay, path boundaries, writes and confirmation;
 - unified action receipts, verifier registry and JSONL traces;
 - deterministic rule policy for a no-key baseline and ablation experiments;
@@ -47,10 +49,10 @@ Initial capability adapters:
 
 | Capability pack | Structured interface | v0.1 operations |
 |---|---|---|
-| Edge | Playwright over an explicitly launched CDP session | DOM snapshot, click, fill, navigate |
+| Edge | Playwright over an isolated Edge session | GUI-style DOM actions, injected DOM events, resource extraction |
 | Windows UI | UI Automation through pywinauto | top-level snapshot, invoke, set text, hotkey |
-| Excel | COM through pywin32 | workbook snapshot, read/write range, create chart |
-| VS Code/Terminal | official `code` CLI and allowlisted argv templates | open/goto, Git status/diff, PowerShell read |
+| Excel | COM through pywin32 plus direct workbook APIs | workbook snapshot, formula write, chart creation, independent COM verification |
+| VS Code/Terminal | official `code` CLI, filesystem API, MCP and allowlisted argv templates | open/goto, test, exact-source repair |
 | Filesystem/MCP | typed API, in-process tools and official MCP stdio transport | list, stat, read, copy, write, allowlisted tool call |
 
 These adapters are intentionally narrow. They are an auditable base for predefined demos, not a claim of
@@ -69,6 +71,20 @@ cua-jev doctor
 pytest
 python scripts/windows_smoke.py
 ```
+
+For the local experiment console used in demos:
+
+```powershell
+python -m pip install -e ".[dev,all,ui]"
+$env:TYPESAFE_API_KEY = "your-key"  # omit when using the Rule baseline
+cua-jev-ui
+```
+
+Open `http://127.0.0.1:8768`. The console launches one local suite at a time and shows the structured
+observation/decision/execution/verification timeline, competitive candidate probabilities, selected
+channels and verifier evidence. Run history stays under `runs/ui/`; the key is inherited from the server
+environment and is never entered in or stored by the page. The console binds to localhost by default because
+its job is to operate local Windows applications, not to act as a hosted control plane.
 
 Run the no-key deterministic demo:
 
@@ -91,10 +107,13 @@ failures from the denominator.
 
 The complete suite command runs four representative tasks:
 
-- Edge launches an isolated system Edge session, filters a local DOM fixture and downloads a CSV;
-- Excel creates a workbook, writes a real formula, builds a chart and reopens the file for COM verification;
-- VS Code/Terminal repairs a failing Python project through API or MCP and reruns its real unit test;
-- Explorer routes a report copy through API or MCP and verifies exact file contents.
+- Edge launches an isolated system Edge session, chooses between GUI-style DOM, injected script and page
+  resource routes, filters a local fixture and exports a verified CSV;
+- Excel chooses independently for formula and chart steps between live Excel COM and direct workbook APIs,
+  then reopens the file in a separate COM session for verification;
+- VS Code/Terminal chooses between filesystem API, MCP and a fixed argv-only CLI repair, then reruns its real
+  unit test;
+- Explorer chooses between filesystem API, MCP and an argv-only copy tool, then verifies exact file contents.
 
 Use `--headed-edge` to make the browser visible for recording and `--open-vscode` to open the generated
 project in VS Code. Every task is reset before each episode, and summary JSON plus per-task JSONL traces are
@@ -192,12 +211,13 @@ probabilities.
 
 ## Scope and roadmap
 
-v0.1 focuses on the action router and execution contract. Next milestones are:
+v0.1 focuses on the action router, multi-route execution contract and a dense local experiment console. Next
+milestones are:
 
 1. add a native Windows UIA task alongside the Explorer filesystem task;
 2. replace the in-process demo MCP tools with configurable remote MCP servers;
 3. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
-4. add action fallback/recovery policies and richer DOM/UIA/Excel predicates;
+4. add action fallback/recovery policies, cross-route retry and richer DOM/UIA/Excel predicates;
 5. add an optional VLM fallback only for observations that DOM/UIA/COM cannot resolve.
 
 ## Honest v0.1 boundary
@@ -208,3 +228,7 @@ filesystem state. It does not understand arbitrary screenshots, generate arbitra
 from every application dialog, or claim general Windows autonomy.
 
 Apache-2.0 licensed.
+
+The console uses the official ZJU-REAL mark and Qiushi eagle assets from
+[zjureal.com](https://zjureal.com/). Their inclusion identifies the lab project and does not change the
+repository's code license.

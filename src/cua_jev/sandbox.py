@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 from .episode import Evaluation
-from .executors import ControlExecutor, FileSystemExecutor, InProcessMcpExecutor
+from .executors import ControlExecutor, FileSystemExecutor, InProcessMcpExecutor, RegisteredCliExecutor
 from .models import ActionCandidate, ActionReceipt, Channel, Observation, Risk, Verification
 from .runtime import StepResult
 
@@ -57,9 +58,22 @@ class FileOrganizationTask:
         return (self.workspace,)
 
     def executor_bindings(self) -> dict[Channel, object]:
+        cli = RegisteredCliExecutor()
+        cli.register(
+            "cli.copy_file",
+            lambda args: [
+                sys.executable,
+                "-m",
+                "cua_jev.tools",
+                "copy-file",
+                args["source_path"],
+                args["destination_path"],
+            ],
+        )
         return {
             Channel.API: FileSystemExecutor(),
             Channel.MCP: sandbox_mcp_executor(),
+            Channel.CLI: cli,
             Channel.CONTROL: ControlExecutor(),
         }
 
@@ -107,6 +121,16 @@ class FileOrganizationTask:
                 Channel.API,
                 "filesystem.copy",
                 "Copy the report through the typed filesystem API.",
+                {"source_path": str(self.source), "destination_path": str(self.destination)},
+                Risk.LOCAL_WRITE,
+                verifier="file.exists",
+                expected={"path": str(self.destination)},
+            ),
+            ActionCandidate(
+                "cli_copy",
+                Channel.CLI,
+                "cli.copy_file",
+                "Copy the report through an allowlisted argv-only CLI command.",
                 {"source_path": str(self.source), "destination_path": str(self.destination)},
                 Risk.LOCAL_WRITE,
                 verifier="file.exists",

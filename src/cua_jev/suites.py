@@ -10,7 +10,14 @@ from typing import Any
 
 from .episode import Evaluation
 from .errors import CapabilityUnavailable
-from .executors import ControlExecutor, ExcelComExecutor, FileSystemExecutor, VSCodeExecutor
+from .executors import (
+    ControlExecutor,
+    ExcelComExecutor,
+    FileSystemExecutor,
+    OpenPyxlExecutor,
+    RegisteredCliExecutor,
+    VSCodeExecutor,
+)
 from .executors.common import execute_with_receipt
 from .models import ActionCandidate, ActionReceipt, Channel, Observation, Risk, Verification
 from .runtime import StepResult
@@ -35,7 +42,12 @@ class EdgeProductTask:
         return (self.workspace,)
 
     def executor_bindings(self) -> dict[Channel, object]:
-        return {Channel.GUI: self, Channel.CONTROL: ControlExecutor()}
+        return {
+            Channel.GUI: self,
+            Channel.SCRIPT: self,
+            Channel.API: self,
+            Channel.CONTROL: ControlExecutor(),
+        }
 
     def reset(self) -> None:
         self.close()
@@ -88,10 +100,18 @@ class EdgeProductTask:
         if state["query"] != "laptop":
             return (
                 ActionCandidate(
-                    "fill_category",
+                    "gui_fill_category",
                     Channel.GUI,
                     "edge.fill",
-                    "Fill the category input with laptop.",
+                    "Fill the category input through Playwright's user-facing input action.",
+                    {"selector": "#query", "text": "laptop"},
+                    Risk.LOCAL_WRITE,
+                ),
+                ActionCandidate(
+                    "script_fill_category",
+                    Channel.SCRIPT,
+                    "edge.dom_set_value",
+                    "Set the DOM value and dispatch an input event without pointer interaction.",
                     {"selector": "#query", "text": "laptop"},
                     Risk.LOCAL_WRITE,
                 ),
@@ -99,10 +119,18 @@ class EdgeProductTask:
         if state["status"] != "complete":
             return (
                 ActionCandidate(
-                    "apply_filter",
+                    "gui_apply_filter",
                     Channel.GUI,
                     "edge.click",
-                    "Click Filter after the category has been entered.",
+                    "Click Filter through the visible Playwright pointer action.",
+                    {"selector": "#filter"},
+                    Risk.LOCAL_WRITE,
+                ),
+                ActionCandidate(
+                    "script_apply_filter",
+                    Channel.SCRIPT,
+                    "edge.dom_dispatch_click",
+                    "Dispatch the filter button click directly through the DOM.",
                     {"selector": "#filter"},
                     Risk.LOCAL_WRITE,
                 ),
@@ -110,10 +138,20 @@ class EdgeProductTask:
         if not state["download_exists"]:
             return (
                 ActionCandidate(
-                    "download_csv",
+                    "gui_download_csv",
                     Channel.GUI,
                     "edge.download",
-                    "Download the filtered CSV to the task workspace.",
+                    "Click the visible download link and save the browser download.",
+                    {"selector": "#download", "destination_path": str(self.download)},
+                    Risk.LOCAL_WRITE,
+                    verifier="file.contains",
+                    expected={"path": str(self.download), "contains": "ThinkPad,laptop,999"},
+                ),
+                ActionCandidate(
+                    "api_download_csv",
+                    Channel.API,
+                    "edge.extract_download",
+                    "Read the generated download resource through the page API and save it directly.",
                     {"selector": "#download", "destination_path": str(self.download)},
                     Risk.LOCAL_WRITE,
                     verifier="file.contains",
@@ -135,12 +173,28 @@ class EdgeProductTask:
             selector = candidate.arguments.get("selector")
             if candidate.capability == "edge.fill":
                 self._page.locator(selector).fill(candidate.arguments["text"])
+            elif candidate.capability == "edge.dom_set_value":
+                self._page.locator(selector).evaluate(
+                    "(element, value) => { element.value = value; "
+                    "element.dispatchEvent(new Event('input', {bubbles: true})); }",
+                    candidate.arguments["text"],
+                )
             elif candidate.capability == "edge.click":
                 self._page.locator(selector).click()
+            elif candidate.capability == "edge.dom_dispatch_click":
+                self._page.locator(selector).dispatch_event("click")
             elif candidate.capability == "edge.download":
                 with self._page.expect_download() as pending:
                     self._page.locator(selector).click()
                 pending.value.save_as(candidate.arguments["destination_path"])
+            elif candidate.capability == "edge.extract_download":
+                payload = self._page.locator(selector).evaluate(
+                    """async element => {
+                      const bytes = new Uint8Array(await (await fetch(element.href)).arrayBuffer());
+                      return Array.from(bytes);
+                    }"""
+                )
+                Path(candidate.arguments["destination_path"]).write_bytes(bytes(payload))
             else:
                 raise ValueError(f"unsupported task capability: {candidate.capability}")
             return {"selector": selector, "url": self._page.url}
@@ -176,7 +230,11 @@ class ExcelSalesTask:
         return (self.workspace,)
 
     def executor_bindings(self) -> dict[Channel, object]:
-        return {Channel.SCRIPT: ExcelComExecutor(visible=False), Channel.CONTROL: ControlExecutor()}
+        return {
+            Channel.SCRIPT: ExcelComExecutor(visible=False),
+            Channel.API: OpenPyxlExecutor(),
+            Channel.CONTROL: ControlExecutor(),
+        }
 
     @staticmethod
     def _excel_modules():
@@ -267,10 +325,10 @@ class ExcelSalesTask:
         if state["summary_value"] != 300:
             return (
                 ActionCandidate(
-                    "write_summary_formula",
+                    "com_write_summary_formula",
                     Channel.SCRIPT,
                     "excel.write_range",
-                    "Write a SUM formula into the summary value cell.",
+                    "Write the SUM formula through a live Excel COM process.",
                     {
                         "workbook_path": str(self.workbook),
                         "sheet": "Summary",
@@ -279,19 +337,48 @@ class ExcelSalesTask:
                     },
                     Risk.LOCAL_WRITE,
                 ),
+                ActionCandidate(
+                    "file_write_summary_formula",
+                    Channel.API,
+                    "excel.file_write_formula",
+                    "Write the SUM formula directly into the workbook file through openpyxl.",
+                    {
+                        "workbook_path": str(self.workbook),
+                        "sheet": "Summary",
+                        "cell": "B2",
+                        "formula": "=SUM(Data!B2:B4)",
+                    },
+                    Risk.LOCAL_WRITE,
+                ),
             )
         if state["chart_count"] < 1:
             return (
                 ActionCandidate(
-                    "create_revenue_chart",
+                    "com_create_revenue_chart",
                     Channel.SCRIPT,
                     "excel.create_chart",
-                    "Create a chart from product and revenue data.",
+                    "Create the chart through a live Excel COM process.",
                     {
                         "workbook_path": str(self.workbook),
                         "sheet": "Data",
                         "range": "A1:B4",
                         "title": "Revenue by product",
+                    },
+                    Risk.LOCAL_WRITE,
+                ),
+                ActionCandidate(
+                    "file_create_revenue_chart",
+                    Channel.API,
+                    "excel.file_create_chart",
+                    "Create the chart directly in the workbook file through openpyxl.",
+                    {
+                        "workbook_path": str(self.workbook),
+                        "sheet": "Data",
+                        "max_row": 4,
+                        "title": "Revenue by product",
+                        "x_axis_title": "Product",
+                        "y_axis_title": "Revenue",
+                        "anchor": "D2",
                     },
                     Risk.LOCAL_WRITE,
                 ),
@@ -337,9 +424,23 @@ class VSCodeTerminalTask:
         return (self.workspace,)
 
     def executor_bindings(self) -> dict[Channel, object]:
+        cli = RegisteredCliExecutor()
+        cli.register(
+            "cli.replace_exact",
+            lambda args: [
+                sys.executable,
+                "-m",
+                "cua_jev.tools",
+                "replace-exact",
+                args["path"],
+                args["old"],
+                args["new"],
+            ],
+        )
         bindings: dict[Channel, object] = {
             Channel.API: FileSystemExecutor(),
             Channel.MCP: sandbox_mcp_executor(),
+            Channel.CLI: cli,
             Channel.CONTROL: ControlExecutor(),
         }
         if self.open_vscode:
@@ -426,6 +527,20 @@ class VSCodeTerminalTask:
                     "filesystem.write_text",
                     "Repair calc.py through the typed filesystem API.",
                     common,
+                    Risk.LOCAL_WRITE,
+                    verifier="file.contains",
+                    expected={"path": str(self.source), "contains": "return left + right"},
+                ),
+                ActionCandidate(
+                    "cli_repair",
+                    Channel.CLI,
+                    "cli.replace_exact",
+                    "Repair only the faulty expression through an allowlisted CLI patch command.",
+                    {
+                        "path": str(self.source),
+                        "old": "return left - right",
+                        "new": "return left + right",
+                    },
                     Risk.LOCAL_WRITE,
                     verifier="file.contains",
                     expected={"path": str(self.source), "contains": "return left + right"},
