@@ -125,14 +125,27 @@
         <div id="task-tabs" class="task-tabs" role="tablist" aria-label="Select a benchmark task"></div>
         <article class="benchmark-board">
           <div class="benchmark-title">
-            <div><span>Paired benchmark</span><h3 id="benchmark-name">Loading</h3></div>
-            <div id="speedup-callout" class="speedup"><strong>—</strong><span>faster with Hybrid</span></div>
+            <div><span>Two comparisons · one task</span><h3 id="benchmark-name">Loading</h3></div>
           </div>
           <p id="benchmark-description" class="benchmark-description"></p>
-          <div class="benchmark-key"><span>Wall time</span><span>Estimated model cost (USD)</span></div>
-          <div id="benchmark-rows" class="benchmark-rows" aria-live="polite"></div>
-          <div id="benchmark-foot" class="benchmark-foot"></div>
-          <p class="cost-note">USD uses published Jev API and Codex Enterprise token rates; your actual bill may differ.</p>
+          <section class="comparison-panel" aria-labelledby="action-comparison-title">
+            <div class="comparison-heading">
+              <div><span class="comparison-index">01 · ACTION SPACE</span><h4 id="action-comparison-title">Hybrid vs GUI Only</h4><p>Same Jev policy. Compare completion time.</p></div>
+              <div id="speedup-callout" class="speedup"><strong>—</strong><span>Hybrid speedup</span></div>
+            </div>
+            <div class="comparison-key"><span>Jev route</span><span>Wall time</span></div>
+            <div id="action-rows" class="comparison-rows" aria-live="polite"></div>
+            <div id="action-foot" class="benchmark-foot"></div>
+          </section>
+          <section class="comparison-panel agent-comparison" aria-labelledby="agent-comparison-title">
+            <div class="comparison-heading">
+              <div><span class="comparison-index">02 · AGENT BASELINE</span><h4 id="agent-comparison-title">Jev vs Codex Computer Use</h4><p>Both Hybrid. Compare completion time and model cost.</p></div>
+            </div>
+            <div class="comparison-key agent-key"><span>Hybrid agent</span><span>Wall time</span><span>Model cost (USD)</span></div>
+            <div id="agent-rows" class="comparison-rows" aria-live="polite"></div>
+            <div id="agent-foot" class="benchmark-foot"></div>
+            <p class="cost-note">Published Jev API and Codex Enterprise token rates; actual bills may differ.</p>
+          </section>
         </article>
       </div>
     </section>

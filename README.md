@@ -117,8 +117,9 @@ cua-jev-ui
 ```
 
 Open `http://127.0.0.1:8768`. The page is deliberately a project introduction rather than an execution
-launcher. It introduces the framework first, then the four long-horizon cases and
-the measured Hybrid-versus-GUI evidence. Benchmark values are read from real local run records; missing paired
+launcher. It introduces the framework first, then the four defined cases and two separate comparisons:
+Jev Hybrid versus Jev GUI Only for action-space efficiency, and Jev Hybrid versus Codex Hybrid for
+wall time plus model-cost USD. Benchmark values are read from real local run records; missing paired
 samples remain visibly unavailable rather than being estimated. Run history stays under `runs/ui/`, and the
 page never accepts or stores an API key.
 

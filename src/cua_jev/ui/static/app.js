@@ -1,7 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 const escapeHTML = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
 const formatMs = (value) => value == null ? "—" : value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${Math.round(value)} ms`;
-const agentLabel = { jev: "Jev", rule: "Rule baseline", codex_computer_use: "Codex agent", jev_with_fallback: "Jev + fallback" };
+const agentLabel = { jev: "Jev", rule: "Rule baseline", codex_computer_use: "Codex Computer Use", jev_with_fallback: "Jev + fallback" };
 let tasks = {};
 let demos = {};
 let selectedTask = "edge";
@@ -111,27 +111,24 @@ function renderTabs() {
   }));
 }
 
-function benchmarkRow(row, maxDuration) {
+function benchmarkRow(row, maxDuration, comparison) {
   const duration = row.median_wall_time_ms;
   const width = duration && maxDuration ? Math.max(6, duration / maxDuration * 100) : 0;
   const kind = row.action_space === "hybrid" ? "hybrid" : "gui";
   const mode = kind === "hybrid" ? "Hybrid" : "GUI Only";
-  const label = `${agentLabel[row.agent] || row.agent} · ${mode}`;
+  const label = comparison === "agent" ? (agentLabel[row.agent] || row.agent) : `${agentLabel[row.agent] || row.agent} · ${mode}`;
   const actions = row.mean_actions == null ? "—" : row.mean_actions.toFixed(1);
   const sampleLabel = row.agent === "codex_computer_use" && row.samples === 1 ? "1 pilot run" : `${row.successful_samples}/${row.samples} runs`;
   const usd = row.agent === "codex_computer_use" ? row.median_reference_cost_usd : row.median_model_cost_usd;
   const cost = usd == null ? "—" : `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(3)}`;
-  return `<div class="result-row"><div class="result-name"><b>${escapeHTML(label)}</b></div><div class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></div><div class="result-cost" aria-label="Estimated model cost"><strong>${cost}</strong></div><div class="result-meta">${sampleLabel} · ${actions} actions</div></div>`;
+  const costCell = comparison === "agent" ? `<div class="result-cost" aria-label="Estimated model cost"><strong>${cost}</strong></div>` : "";
+  return `<div class="result-row ${comparison}-row"><div class="result-name"><b>${escapeHTML(label)}</b></div><div class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></div>${costCell}<div class="result-meta">${sampleLabel} · ${actions} actions</div></div>`;
 }
 
 function pairedRows(rows) {
-  const byAgent = new Map();
-  rows.forEach((row) => {
-    if (!byAgent.has(row.agent)) byAgent.set(row.agent, {});
-    byAgent.get(row.agent)[row.action_space] = row;
-  });
-  return [...byAgent.entries()].find(([agent, pair]) => agent.startsWith("jev") && pair.hybrid?.median_wall_time_ms && pair.gui_only?.median_wall_time_ms)
-    || [...byAgent.entries()].find(([, pair]) => pair.hybrid?.median_wall_time_ms && pair.gui_only?.median_wall_time_ms);
+  const hybrid = rows.find((row) => row.agent === "jev" && row.action_space === "hybrid" && row.median_wall_time_ms != null);
+  const gui = rows.find((row) => row.agent === "jev" && row.action_space === "gui_only" && row.median_wall_time_ms != null);
+  return hybrid && gui ? ["jev", { hybrid, gui_only: gui }] : null;
 }
 
 async function renderHeadlineMetrics() {
@@ -152,41 +149,53 @@ async function renderHeadlineMetrics() {
 
 async function renderBenchmark() {
   const request = ++benchmarkRequest;
-  const task = tasks[selectedTask];
+  const taskId = selectedTask;
+  const task = tasks[taskId];
   $("#benchmark-name").textContent = task.title;
   $("#benchmark-description").textContent = task.description;
-  $("#benchmark-rows").setAttribute("aria-busy", "true");
-  $("#benchmark-rows").innerHTML = `<div class="empty-results"><b>Loading measured runs</b><span>Reading the local benchmark store…</span></div>`;
-  $("#speedup-callout").innerHTML = `<strong>—</strong><span>paired wall-time ratio</span>`;
-  $("#benchmark-foot").textContent = "";
+  ["#action-rows", "#agent-rows"].forEach((selector) => {
+    $(selector).setAttribute("aria-busy", "true");
+    $(selector).innerHTML = `<div class="empty-results"><b>Loading measured runs</b><span>Reading the local benchmark store…</span></div>`;
+  });
+  $("#speedup-callout").innerHTML = `<strong>—</strong><span>Hybrid speedup</span>`;
+  $("#action-foot").textContent = "";
+  $("#agent-foot").textContent = "";
   try {
-    const { rows = [] } = await getJSON(`/api/benchmarks?task=${encodeURIComponent(selectedTask)}`, 1);
+    const { rows = [] } = await getJSON(`/api/benchmarks?task=${encodeURIComponent(taskId)}`, 1);
     if (request !== benchmarkRequest) return;
-    const maxDuration = Math.max(0, ...rows.map((row) => row.median_wall_time_ms || 0));
-    $("#benchmark-rows").innerHTML = rows.length
-      ? rows.map((row) => benchmarkRow(row, maxDuration)).join("")
-      : `<div class="empty-results"><b>No paired runs yet</b><span>Measured Hybrid and GUI Only results will appear here.</span></div>`;
     const pair = pairedRows(rows);
     if (pair) {
       const [, values] = pair;
-      const speedup = values.gui_only.median_wall_time_ms / values.hybrid.median_wall_time_ms;
-      const wording = speedup >= 1.02 ? "Hybrid speedup" : "GUI Only ÷ Hybrid";
-      $("#speedup-callout").innerHTML = `<strong>${speedup.toFixed(1)}×</strong><span>${wording}</span>`;
-      const codexSamples = rows.filter((row) => row.agent === "codex_computer_use").reduce((sum, row) => sum + row.samples, 0);
-      const codexNote = codexSamples ? ` · ${codexSamples} Codex pilot ${codexSamples === 1 ? "run" : "runs"}` : "";
-      $("#benchmark-foot").textContent = `${values.hybrid.samples + values.gui_only.samples} Jev runs${codexNote} · same terminal verifier`;
+      const actionRows = [values.hybrid, values.gui_only];
+      const maxActionTime = Math.max(...actionRows.map((row) => row.median_wall_time_ms));
+      $("#action-rows").innerHTML = actionRows.map((row) => benchmarkRow(row, maxActionTime, "action")).join("");
+      const ratio = values.gui_only.median_wall_time_ms / values.hybrid.median_wall_time_ms;
+      const faster = ratio >= 1 ? "Hybrid" : "GUI Only";
+      $("#speedup-callout").innerHTML = `<strong>${Math.max(ratio, 1 / ratio).toFixed(1)}×</strong><span>${faster} faster</span>`;
+      $("#action-foot").textContent = `${values.hybrid.samples} Hybrid · ${values.gui_only.samples} GUI Only · same terminal verifier`;
     } else {
-      $("#speedup-callout").innerHTML = `<strong>—</strong><span>paired speedup</span>`;
-      $("#benchmark-foot").textContent = "Only measured runs are shown—no estimated values.";
+      $("#action-rows").innerHTML = `<div class="empty-results"><b>Jev pair unavailable</b><span>Run both Hybrid and GUI Only to compare action spaces.</span></div>`;
+      $("#action-foot").textContent = "Only successful measured runs are compared.";
+    }
+    const jevHybrid = rows.find((row) => row.agent === "jev" && row.action_space === "hybrid" && row.median_wall_time_ms != null);
+    const codexHybrid = rows.find((row) => row.agent === "codex_computer_use" && row.action_space === "hybrid" && row.median_wall_time_ms != null);
+    if (jevHybrid && codexHybrid) {
+      const agentRows = [jevHybrid, codexHybrid];
+      const maxAgentTime = Math.max(...agentRows.map((row) => row.median_wall_time_ms));
+      $("#agent-rows").innerHTML = agentRows.map((row) => benchmarkRow(row, maxAgentTime, "agent")).join("");
+      $("#agent-foot").textContent = `${jevHybrid.samples} Jev runs · ${codexHybrid.samples} Codex pilot ${codexHybrid.samples === 1 ? "run" : "runs"} · same terminal verifier`;
+    } else {
+      $("#agent-rows").innerHTML = `<div class="empty-results"><b>Hybrid baseline unavailable</b><span>This comparison needs successful Jev and Codex Hybrid runs.</span></div>`;
+      $("#agent-foot").textContent = "No Codex values are inferred from Jev's GUI Only runs.";
     }
   } catch (error) {
     if (request !== benchmarkRequest) return;
-    $("#speedup-callout").innerHTML = `<strong>—</strong><span>paired wall-time ratio</span>`;
-    $("#benchmark-foot").textContent = "The data request failed; no previous task metrics are being shown.";
-    $("#benchmark-rows").innerHTML = `<div class="empty-results"><b>Results unavailable</b><span>${escapeHTML(error.message)}</span><button class="retry-button" type="button">Retry</button></div>`;
-    $(".retry-button").addEventListener("click", renderBenchmark, { once: true });
+    ["#action-rows", "#agent-rows"].forEach((selector) => {
+      $(selector).innerHTML = `<div class="empty-results"><b>Results unavailable</b><span>${escapeHTML(error.message)}</span><button class="retry-button" type="button">Retry</button></div>`;
+    });
+    document.querySelectorAll(".retry-button").forEach((button) => button.addEventListener("click", renderBenchmark, { once: true }));
   } finally {
-    if (request === benchmarkRequest) $("#benchmark-rows").setAttribute("aria-busy", "false");
+    if (request === benchmarkRequest) ["#action-rows", "#agent-rows"].forEach((selector) => $(selector).setAttribute("aria-busy", "false"));
   }
 }
 

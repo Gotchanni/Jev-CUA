@@ -149,6 +149,9 @@ def test_console_serves_brand_assets(tmp_path: Path) -> None:
         assert "Runtime acts &amp; checks" in page.text
         assert "not general app automation" in page.text
         assert "Four defined Windows workflows" in page.text
+        assert "Hybrid vs GUI Only" in page.text
+        assert "Jev vs Codex Computer Use" in page.text
+        assert page.text.index('id="action-rows"') < page.text.index('id="agent-rows"')
         assert "43 ms" not in page.text
         assert ">REAL LAB<" not in page.text
         assert "qiushi-eagle" not in page.text
