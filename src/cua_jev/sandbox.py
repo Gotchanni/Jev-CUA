@@ -381,6 +381,11 @@ class FileOrganizationTask:
                 return {"backend": "pyautogui", "window": window.window_text()}
             if candidate.capability == "notepad.screen_write_text":
                 path = Path(candidate.arguments["path"])
+                # Windows 11 Notepad only creates a missing command-line file on
+                # cold start. With an existing tabbed window it silently ignores
+                # the missing path, so create an empty target before visibly
+                # opening and populating it through the UI.
+                path.touch(exist_ok=True)
                 process = subprocess.Popen(
                     ["notepad.exe", str(path)],
                     stdout=subprocess.DEVNULL,
