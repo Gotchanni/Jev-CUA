@@ -665,7 +665,8 @@ class EdgeProductTask:
         locator = self._page.locator(selector)
         if selector == "#add-to-cart-sauce-labs-backpack":
             self.screen.hotkey("ctrl", "f")
-            self.screen.write("Sauce Labs Backpack")
+            # Clipboard paste is independent of the currently selected Windows IME.
+            self.screen.paste_text("Sauce Labs Backpack")
             self.screen.press("enter")
             self.screen.press("esc")
         rectangle = window.rectangle()
@@ -685,7 +686,7 @@ class EdgeProductTask:
             self.screen.click_point(x, y)
             if candidate.capability == "edge.fill":
                 self.screen.hotkey("ctrl", "a")
-                self.screen.write(candidate.arguments["text"])
+                self.screen.paste_text(candidate.arguments["text"])
             elif candidate.capability == "edge.select_low_to_high":
                 self.screen.press("home")
                 self.screen.press("down")
