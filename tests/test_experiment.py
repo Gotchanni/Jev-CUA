@@ -26,6 +26,6 @@ def test_experiment_preserves_all_episode_results(tmp_path):
     )
     summary = experiment.summary()
     assert summary["episodes"] == summary["successes"] == 3
-    assert summary["channels"] == {"mcp": 3, "control": 3}
+    assert summary["channels"] == {"mcp": 9, "control": 3}
     low, high = wilson_interval(3, 3)
     assert 0 < low < high == 1

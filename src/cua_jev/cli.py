@@ -56,6 +56,7 @@ def _parser() -> argparse.ArgumentParser:
     suite.add_argument("--trace", default="runs/suite.jsonl")
     suite.add_argument("--headed-edge", action="store_true")
     suite.add_argument("--open-vscode", action="store_true")
+    suite.add_argument("--visible-apps", action="store_true")
     return parser
 
 
@@ -160,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
                     workspace,
                     headed_edge=args.headed_edge,
                     open_vscode=args.open_vscode,
+                    visible_apps=args.visible_apps,
                 ),
                 args.episodes,
             )

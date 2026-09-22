@@ -15,6 +15,9 @@ def _parser() -> argparse.ArgumentParser:
     copy = sub.add_parser("copy-file")
     copy.add_argument("source", type=Path)
     copy.add_argument("destination", type=Path)
+    write = sub.add_parser("write-text")
+    write.add_argument("path", type=Path)
+    write.add_argument("text")
     return parser
 
 
@@ -26,8 +29,12 @@ def main(argv: list[str] | None = None) -> int:
             raise SystemExit("expected exactly one matching text segment")
         args.path.write_text(text.replace(args.old, args.new), encoding="utf-8")
         return 0
-    args.destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(args.source, args.destination)
+    if args.command == "copy-file":
+        args.destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(args.source, args.destination)
+        return 0
+    args.path.parent.mkdir(parents=True, exist_ok=True)
+    args.path.write_text(args.text, encoding="utf-8")
     return 0
 
 

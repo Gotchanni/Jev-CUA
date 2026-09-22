@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from .errors import GuardRejected
 from .guard import ActionGuard
 from .models import ActionCandidate, ActionReceipt, Decision, Observation, Verification
 from .policy import DecisionPolicy
@@ -42,7 +43,32 @@ class AgentRuntime:
         exchange = getattr(self.policy, "last_exchange", None)
         if exchange:
             self.trace.append("policy_exchange", exchange)
-        candidate = self.guard.approve(observation, decision, candidates)
+        candidate = next((item for item in candidates if item.id == decision.candidate_id), None)
+        self.trace.append(
+            "commitment",
+            {
+                "candidate_id": decision.candidate_id,
+                "intent": candidate.intent if candidate else "unknown",
+                "channel": str(candidate.channel) if candidate else "unknown",
+                "capability": candidate.capability if candidate else "unknown",
+            },
+        )
+        try:
+            candidate = self.guard.approve(observation, decision, candidates)
+        except GuardRejected as exc:
+            self.trace.append(
+                "guard",
+                {"approved": False, "candidate_id": decision.candidate_id, "reason": str(exc)},
+            )
+            raise
+        self.trace.append(
+            "guard",
+            {
+                "approved": True,
+                "candidate_id": candidate.id,
+                "checks": ["fresh_observation", "offered_candidate", "risk", "paths", "preconditions"],
+            },
+        )
         receipt = self.executors.execute(candidate, observation.observation_id, decision.decision_id)
         self.trace.append("receipt", receipt.to_dict())
         verification = self.verifiers.verify(candidate, receipt)

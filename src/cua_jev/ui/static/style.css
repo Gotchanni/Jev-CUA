@@ -134,6 +134,7 @@ main { grid-column: 2; min-width: 0; max-width: 1540px; width: 100%; margin: 0 a
 .candidate { display: grid; grid-template-columns: 105px minmax(0, 1fr) 58px; gap: 12px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 9px; }
 .candidate.selected { border-color: rgba(201,100,66,.4); background: var(--accent-soft); }
 .candidate-channel { color: var(--blue); font: 600 11px/1.4 var(--mono); text-transform: uppercase; }
+.candidate-channel em { display: block; margin-top: 4px; color: var(--subtle); font-style: normal; text-transform: none; overflow-wrap: anywhere; }
 .candidate-copy b { display: block; font-size: 14px; }
 .candidate-copy small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
 .probability { text-align: right; font: 650 13px/1.4 var(--mono); }
@@ -152,6 +153,7 @@ th, td { padding: 13px 16px; border-bottom: 1px solid var(--line); text-align: l
 th { color: var(--subtle); background: var(--surface-muted); font: 600 11px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
 tbody tr:last-child td { border-bottom: 0; }
 td:first-child { font-family: var(--mono); }
+.history-link { padding: 0; border: 0; color: var(--blue); background: transparent; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .status { display: inline-flex; min-height: 25px; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--surface-muted); font-size: 12px; }
 .status.completed { color: var(--green); background: var(--green-soft); }
 .status.failed, .status.stopped { color: var(--red); background: var(--red-soft); }

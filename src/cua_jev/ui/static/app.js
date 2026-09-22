@@ -5,6 +5,7 @@ let selectedTask = "edge";
 let currentRun = null;
 let runs = [];
 let pollCount = 0;
+let viewKind = "waiting";
 
 const escapeHTML = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
 
@@ -40,15 +41,15 @@ function renderTasks() {
 function updateConfig() {
   const task = tasks[selectedTask];
   $("#selected-routes").innerHTML = task ? task.routes.map((route) => `<span>${escapeHTML(route)}</span>`).join("") : "";
-  $("#headed-edge").closest("label").hidden = !["edge", "all"].includes(selectedTask);
-  $("#open-vscode").closest("label").hidden = !["vscode", "all"].includes(selectedTask);
 }
 
-function eventLabel(event) {
+function eventLabel(event, run) {
   const payload = event.payload || {};
   if (event.kind === "observation") return ["Observation", payload.subgoal || payload.task || "状态已读取"];
   if (event.kind === "candidates") return ["Candidates", `${(payload.items || []).length} 条合法路线`];
-  if (event.kind === "decision") return ["Jev Decision", payload.candidate_id || "动作已选择"];
+  if (event.kind === "decision") return [run?.policy === "rule" ? "Rule Decision" : "Jev Decision", payload.candidate_id || "动作已选择"];
+  if (event.kind === "commitment") return ["Commitment", `${payload.intent || "act"} · ${payload.channel || "channel"}`];
+  if (event.kind === "guard") return ["Guard", payload.approved ? "安全检查通过" : `拒绝：${payload.reason || "unknown"}`];
   if (event.kind === "receipt") return ["Executor", `${payload.channel || "channel"} · ${payload.success ? "执行成功" : "执行失败"}`];
   if (event.kind === "verification") return ["Verifier", payload.passed ? "验证通过" : "验证失败"];
   if (event.kind === "evaluation") return ["Evaluation", payload.reason || "状态已评估"];
@@ -56,12 +57,12 @@ function eventLabel(event) {
   return [event.kind, "事件已记录"];
 }
 
-function renderTimeline(events) {
-  const visible = events.filter((event) => !["candidates"].includes(event.kind)).slice(-12);
+function renderTimeline(events, run) {
+  const visible = events.filter((event) => !["candidates", "policy_exchange"].includes(event.kind)).slice(-18);
   $("#live-empty").hidden = visible.length > 0;
   $("#event-count").textContent = `${events.length} events`;
   $("#timeline").innerHTML = visible.map((event, index) => {
-    const [title, detail] = eventLabel(event);
+    const [title, detail] = eventLabel(event, run);
     return `<li class="${index === visible.length - 1 ? "current" : ""}"><span class="timeline-top"><span>${escapeHTML(event.suite || "run")}</span><span>${String(index + 1).padStart(2,"0")}</span></span><strong>${escapeHTML(title)}</strong><p>${escapeHTML(detail)}</p></li>`;
   }).join("");
 }
@@ -88,16 +89,16 @@ function renderEvidence(run) {
     $("#candidate-board").innerHTML = candidates.map((candidate) => {
       const probability = Number(decision?.probabilities?.[candidate.id] ?? 0);
       const selected = decision?.candidate_id === candidate.id;
-      return `<div class="candidate ${selected ? "selected" : ""}"><span class="candidate-channel">${escapeHTML(candidate.channel)}</span><span class="candidate-copy"><b>${escapeHTML(candidate.id)}</b><small>${escapeHTML(candidate.description)}</small></span><span class="probability">${(probability * 100).toFixed(1)}%<i style="--p:${probability * 100}%"></i></span></div>`;
+      return `<div class="candidate ${selected ? "selected" : ""}"><span class="candidate-channel">${escapeHTML(candidate.channel)}<em>${escapeHTML(candidate.intent || "act")}</em></span><span class="candidate-copy"><b>${escapeHTML(candidate.id)}</b><small>${escapeHTML(candidate.description)}</small></span><span class="probability">${(probability * 100).toFixed(1)}%<i style="--p:${probability * 100}%"></i></span></div>`;
     }).join("");
   } else {
     $("#candidate-board").innerHTML = '<p class="muted">运行后显示候选动作与概率。</p>';
   }
-  const verification = events.filter((event) => event.kind === "verification" || event.kind === "episode").slice(-5);
+  const verification = events.filter((event) => ["guard", "verification", "episode"].includes(event.kind)).slice(-7);
   $("#verification-board").innerHTML = verification.length ? verification.map((event) => {
-    const passed = event.kind === "episode" ? event.payload.status === "success" : event.payload.passed;
-    const title = event.kind === "episode" ? `Episode · ${event.payload.status}` : event.payload.verifier;
-    const detail = event.kind === "episode" ? event.payload.reason : JSON.stringify(event.payload.details || {});
+    const passed = event.kind === "episode" ? event.payload.status === "success" : event.kind === "guard" ? event.payload.approved : event.payload.passed;
+    const title = event.kind === "episode" ? `Episode · ${event.payload.status}` : event.kind === "guard" ? `Guard · ${event.payload.approved ? "approved" : "rejected"}` : event.payload.verifier;
+    const detail = event.kind === "episode" ? event.payload.reason : event.kind === "guard" ? JSON.stringify(event.payload.checks || event.payload.reason || {}) : JSON.stringify(event.payload.details || {});
     return `<div class="verification-item ${passed ? "" : "failed"}"><b>${escapeHTML(title)}</b><span>${escapeHTML(detail)}</span></div>`;
   }).join("") : '<p class="muted">独立验证结果会出现在这里。</p>';
   const summary = run?.summary;
@@ -117,26 +118,33 @@ function channelSummary(run) {
 function renderHistory() {
   $("#history-body").innerHTML = runs.length ? runs.slice(0, 12).map((run) => {
     const success = run.summary?.all_passed;
-    return `<tr><td>${escapeHTML(run.id.slice(0, 15))}</td><td>${escapeHTML(tasks[run.task]?.title || run.task)}</td><td>${escapeHTML(run.policy)}</td><td><span class="status ${escapeHTML(run.status)}">${escapeHTML(run.status)}</span></td><td>${escapeHTML(channelSummary(run))}</td><td>${run.status === "completed" ? (success ? "通过" : "未通过") : "—"}</td></tr>`;
+    return `<tr data-run-id="${escapeHTML(run.id)}"><td><button class="history-link" data-open-run="${escapeHTML(run.id)}">${escapeHTML(run.id.slice(0, 15))}</button></td><td>${escapeHTML(tasks[run.task]?.title || run.task)}</td><td>${escapeHTML(run.policy)}</td><td><span class="status ${escapeHTML(run.status)}">${escapeHTML(run.status)}</span></td><td>${escapeHTML(channelSummary(run))}</td><td>${run.status === "completed" ? (success ? "通过" : "未通过") : "—"}</td></tr>`;
   }).join("") : '<tr><td colspan="6" class="muted">还没有本机实验记录。</td></tr>';
+  document.querySelectorAll("[data-open-run]").forEach((button) => {
+    button.onclick = async () => { viewKind = "replay"; renderRun(await api(`/api/runs/${button.dataset.openRun}`)); location.hash = "evidence"; };
+  });
 }
 
 function renderRun(run) {
   currentRun = run;
   const running = run?.status === "running";
   $("#runtime-state").textContent = running ? "运行中" : "空闲";
-  $("#header-status").textContent = run ? run.status : "Ready";
+  $("#header-status").textContent = run ? `${viewKind === "replay" ? "REPLAY" : "LIVE"} · ${run.policy.toUpperCase()} · ${run.status}` : "Ready";
+  $("#trace-kind").textContent = run ? `03 / ${viewKind === "replay" ? "HISTORY REPLAY" : "LIVE EXECUTION"}` : "03 / WAITING";
   $("#run-button").disabled = running;
   $("#stop-button").hidden = !running;
-  renderTimeline(run?.events || []);
+  renderTimeline(run?.events || [], run);
   renderEvidence(run);
 }
 
 async function startRun() {
   $("#action-error").textContent = "";
-  const policy = document.querySelector('input[name="policy"]:checked').value;
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const policy = mode === "demo" ? "jev" : document.querySelector('input[name="policy"]:checked').value;
   try {
-    const run = await api("/api/runs", { task: selectedTask, policy, headed_edge: $("#headed-edge").checked, open_vscode: $("#open-vscode").checked });
+    viewKind = "live";
+    renderRun(null);
+    const run = await api("/api/runs", { task: selectedTask, policy, visible_desktop: $("#visible-desktop").checked });
     renderRun(run);
     await refreshRuns();
   } catch (error) { $("#action-error").textContent = error.message; }
@@ -172,10 +180,12 @@ async function init() {
     $("#runtime-dot").style.background = bootstrap.jev_configured ? "var(--green)" : "var(--amber)";
     renderTasks();
     await refreshRuns();
-    if (bootstrap.active_id) renderRun(await api(`/api/runs/${bootstrap.active_id}`));
-    else if (runs.length) renderRun(runs[0]);
+    if (bootstrap.active_id) { viewKind = "live"; renderRun(await api(`/api/runs/${bootstrap.active_id}`)); }
     $("#run-button").onclick = startRun;
     $("#stop-button").onclick = stopRun;
+    document.querySelectorAll('input[name="mode"]').forEach((input) => {
+      input.onchange = () => { $("#evaluation-policy").hidden = input.value !== "evaluation" || !input.checked; };
+    });
     setInterval(poll, 900);
   } catch (error) { $("#action-error").textContent = error.message; }
 }

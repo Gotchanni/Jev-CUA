@@ -29,6 +29,8 @@ def test_runtime_reads_and_verifies_file(tmp_path):
         "observation",
         "candidates",
         "decision",
+        "commitment",
+        "guard",
         "receipt",
         "verification",
     ]

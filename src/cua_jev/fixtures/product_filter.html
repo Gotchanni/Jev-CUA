@@ -5,25 +5,46 @@
   <body>
     <h1>Product export</h1>
     <label>Category <input id="query" aria-label="Category"></label>
-    <button id="filter">Filter</button>
+    <label>Maximum price <input id="max-price" aria-label="Maximum price" type="number"></label>
+    <label><input id="in-stock" type="checkbox"> In stock only</label>
+    <button id="filter">Search</button>
     <p id="status" data-state="idle">Waiting</p>
+    <table id="results" hidden><thead><tr><th>Product</th><th>Price</th></tr></thead>
+      <tbody><tr><td>ThinkPad</td><td>999</td></tr><tr><td>Surface</td><td>1099</td></tr></tbody>
+    </table>
+    <button id="confirm" hidden>Confirm export</button>
     <a id="download" hidden download="products.csv">Download CSV</a>
     <script>
       document.querySelector('#filter').addEventListener('click', () => {
         const query = document.querySelector('#query').value.trim().toLowerCase();
+        const maxPrice = Number(document.querySelector('#max-price').value);
+        const inStock = document.querySelector('#in-stock').checked;
         const status = document.querySelector('#status');
         const download = document.querySelector('#download');
-        if (query !== 'laptop') {
+        const results = document.querySelector('#results');
+        const confirm = document.querySelector('#confirm');
+        if (query !== 'laptop' || maxPrice !== 1200 || !inStock) {
           status.dataset.state = 'invalid';
-          status.textContent = 'No matching category';
+          status.textContent = 'Review category, price and availability filters';
+          results.hidden = true;
+          confirm.hidden = true;
           download.hidden = true;
           return;
         }
-        const blob = new Blob(['product,category,price\nThinkPad,laptop,999\n'], {type: 'text/csv'});
+        results.hidden = false;
+        confirm.hidden = false;
+        download.hidden = true;
+        status.dataset.state = 'review';
+        status.textContent = '2 matching products require confirmation';
+      });
+      document.querySelector('#confirm').addEventListener('click', () => {
+        const status = document.querySelector('#status');
+        const download = document.querySelector('#download');
+        const blob = new Blob(['product,category,price,in_stock\nThinkPad,laptop,999,true\nSurface,laptop,1099,true\n'], {type: 'text/csv'});
         download.href = URL.createObjectURL(blob);
         download.hidden = false;
         status.dataset.state = 'complete';
-        status.textContent = '1 result ready';
+        status.textContent = '2 reviewed results ready';
       });
     </script>
   </body>

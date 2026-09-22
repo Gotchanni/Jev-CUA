@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from ..errors import CapabilityUnavailable
@@ -25,6 +26,32 @@ class VSCodeExecutor:
                 line = int(candidate.arguments.get("line", 1))
                 column = int(candidate.arguments.get("column", 1))
                 argv = [executable, "--reuse-window", "--goto", f"{target}:{line}:{column}"]
+            elif candidate.capability == "vscode.uia_replace_line":
+                try:
+                    from pywinauto import Desktop
+                    from pywinauto.keyboard import send_keys
+                except ImportError:
+                    raise CapabilityUnavailable(
+                        "install cua-jev[windows] for VS Code UI Automation"
+                    ) from None
+                target = str(Path(candidate.arguments["path"]).resolve())
+                line = int(candidate.arguments["line"])
+                argv = [executable, "--reuse-window", "--goto", f"{target}:{line}:1"]
+                completed = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=15, shell=False, check=False
+                )
+                if completed.returncode:
+                    raise RuntimeError(completed.stderr[-1000:])
+                window = Desktop(backend="uia").window(title_re=r".*Visual Studio Code.*|.*calc\.py.*")
+                window.wait("exists enabled visible ready", timeout=15)
+                window.set_focus()
+                time.sleep(1)
+                text = str(candidate.arguments["text"]).replace("+", "{+}")
+                send_keys("{HOME}+{END}")
+                send_keys(text, with_spaces=True, pause=0.01)
+                send_keys("^s")
+                time.sleep(0.5)
+                return {"argv": argv, "window": window.window_text(), "line": line}
             else:
                 raise ValueError(f"unsupported VS Code capability: {candidate.capability}")
             completed = subprocess.run(

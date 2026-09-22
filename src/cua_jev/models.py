@@ -63,10 +63,11 @@ class ActionCandidate:
     verifier: str | None = None
     expected: dict[str, Any] = field(default_factory=dict)
     requires_confirmation: bool = False
+    intent: str = "act"
 
     def __post_init__(self) -> None:
-        if not self.id or not self.capability or not self.description:
-            raise ValueError("candidate id, capability and description are required")
+        if not self.id or not self.capability or not self.description or not self.intent:
+            raise ValueError("candidate id, capability, description and intent are required")
         json.dumps(self.arguments)
 
     def to_dict(self) -> dict[str, Any]:

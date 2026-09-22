@@ -6,7 +6,7 @@ CUA-JEV tests a narrow hypothesis: once a task and the current computer state ha
 small set of legal actions, can Jev select the next action faster and more cheaply than a general-purpose
 agent while preserving safety and task success?
 
-The v0.1 prototype deliberately uses **no VLM**. It combines structured observations from Edge DOM,
+The first prototype deliberately uses **no VLM**. It combines structured observations from Edge DOM,
 Windows UI Automation, Excel COM, VS Code/terminal text, filesystem APIs and MCP-shaped tools. Jev does
 not generate shell commands or scripts. It chooses one complete, typed action candidate; a deterministic
 guard validates it, a channel executor runs it, and an independent verifier checks the result.
@@ -47,7 +47,7 @@ The shared runtime is functional and covered by tests:
 
 Initial capability adapters:
 
-| Capability pack | Structured interface | v0.1 operations |
+| Capability pack | Structured interface | first-release operations |
 |---|---|---|
 | Edge | Playwright over an isolated Edge session | GUI-style DOM actions, injected DOM events, resource extraction |
 | Windows UI | UI Automation through pywinauto | top-level snapshot, invoke, set text, hotkey |
@@ -80,11 +80,16 @@ $env:TYPESAFE_API_KEY = "your-key"  # omit when using the Rule baseline
 cua-jev-ui
 ```
 
-Open `http://127.0.0.1:8768`. The console launches one local suite at a time and shows the structured
-observation/decision/execution/verification timeline, competitive candidate probabilities, selected
-channels and verifier evidence. Run history stays under `runs/ui/`; the key is inherited from the server
-environment and is never entered in or stored by the page. The console binds to localhost by default because
-its job is to operate local Windows applications, not to act as a hosted control plane.
+Open `http://127.0.0.1:8768`. **Jev Demo** is the honest presentation mode: it always uses the live Jev
+policy, does not silently replay a prior run, and can expose the real Edge, Excel, VS Code and Explorer
+windows while the task executes. **Evaluation** makes Jev and the deterministic Rule baseline available for
+controlled comparisons. Historical runs are labelled `REPLAY` and load only when selected explicitly.
+
+The console shows the complete closed loop: structured observation, the currently legal intent-and-route
+candidates, Jev probabilities, commitment, Guard approval, executor receipt and independent verification.
+Run history stays under `runs/ui/`; the key is inherited from the server environment and is never entered in
+or stored by the page. The console binds to localhost because its job is to operate local Windows
+applications, not to act as a hosted control plane.
 
 Run the no-key deterministic demo:
 
@@ -105,19 +110,23 @@ routes, executes one, observes the changed filesystem, emits `control.done`, and
 after an independent byte-for-byte verifier. `experiment` repeats this resettable episode without dropping
 failures from the denominator.
 
-The complete suite command runs four representative tasks:
+The complete suite command runs four multi-step, independently verified workflows:
 
-- Edge launches an isolated system Edge session, chooses between GUI-style DOM, injected script and page
-  resource routes, filters a local fixture and exports a verified CSV;
-- Excel chooses independently for formula and chart steps between live Excel COM and direct workbook APIs,
-  then reopens the file in a separate COM session for verification;
-- VS Code/Terminal chooses between filesystem API, MCP and a fixed argv-only CLI repair, then reruns its real
-  unit test;
-- Explorer chooses between filesystem API, MCP and an argv-only copy tool, then verifies exact file contents.
+| Workflow | Required state transitions | Competing real routes |
+|---|---|---|
+| Edge procurement | set category, set budget, require stock, search, review, export | visible DOM GUI, injected DOM script, page resource API |
+| Excel sales review | compute total, compute average, mark reviewed, create chart | visible Excel COM, background COM script, direct workbook API |
+| VS Code diagnosis | run failing tests, repair either independent defect, rerun, repair the other, prove green | visible editor UIA, MCP, filesystem API, allowlisted CLI |
+| Explorer publishing | distinguish final Q3 files from draft/prior-quarter distractors, archive both, write exact manifest | visible Explorer UIA, MCP, filesystem API, allowlisted CLI |
 
-Use `--headed-edge` to make the browser visible for recording and `--open-vscode` to open the generated
-project in VS Code. Every task is reset before each episode, and summary JSON plus per-task JSONL traces are
-written under `runs/` by default.
+These are not four fixed action scripts. At each state, the task builder offers every currently legal
+**intent × execution route** pair. For example, the initial Excel state can expose twelve candidates across
+four pending subgoals and three backends; after one action, the remaining candidate set is rebuilt from the
+new workbook state. Jev therefore chooses both *what to do next* and *how to do it*.
+
+Use `--headed-edge`, `--open-vscode` and `--visible-apps` for a recordable run in which all four desktop GUI
+routes are available. Every task is reset before each episode, and summary JSON plus per-task JSONL traces
+are written under `runs/` by default.
 
 To run the same candidates through real Jev:
 
@@ -125,6 +134,7 @@ To run the same candidates through real Jev:
 $env:TYPESAFE_API_KEY = "your-key"
 cua-jev demo --policy jev
 cua-jev suite --task all --policy jev
+cua-jev suite --task all --policy jev --headed-edge --open-vscode --visible-apps
 ```
 
 Validate only the API decision path, or repeat the frozen task for reliability measurements:
@@ -211,19 +221,19 @@ probabilities.
 
 ## Scope and roadmap
 
-v0.1 focuses on the action router, multi-route execution contract and a dense local experiment console. Next
+The first release focuses on the action router, multi-route execution contract and a dense local experiment console. Next
 milestones are:
 
-1. add a native Windows UIA task alongside the Explorer filesystem task;
-2. replace the in-process demo MCP tools with configurable remote MCP servers;
-3. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
-4. add action fallback/recovery policies, cross-route retry and richer DOM/UIA/Excel predicates;
+1. replace the in-process demo MCP tools with configurable remote MCP servers;
+2. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
+3. add action fallback/recovery policies, cross-route retry and richer DOM/UIA/Excel predicates;
+4. grow from four workflows into parameterized task families with held-out instances;
 5. add an optional VLM fallback only for observations that DOM/UIA/COM cannot resolve.
 
-## Honest v0.1 boundary
+## Honest first-release boundary
 
 The four representative suites are executable today, but they are deliberately frozen fixtures rather than
-open-ended desktop tasks. CUA-JEV v0.1 targets predefined tasks with structured DOM, UIA, COM, terminal and
+open-ended desktop tasks. CUA-JEV targets predefined tasks with structured DOM, UIA, COM, terminal and
 filesystem state. It does not understand arbitrary screenshots, generate arbitrary shell commands, recover
 from every application dialog, or claim general Windows autonomy.
 

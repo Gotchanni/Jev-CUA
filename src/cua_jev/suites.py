@@ -80,12 +80,17 @@ class EdgeProductTask:
         if self._page is None:
             raise RuntimeError("Edge task has not been reset")
         return Observation(
-            task="Filter products to laptop and export the resulting CSV.",
+            task="Find in-stock laptops under 1200, review the result set, and export a verified CSV.",
             subgoal="Verify completion" if self.download.exists() else "Advance the browser workflow",
             state={
                 "url": self._page.url,
                 "query": self._page.locator("#query").input_value(),
+                "max_price": self._page.locator("#max-price").input_value(),
+                "in_stock": self._page.locator("#in-stock").is_checked(),
                 "status": self._page.locator("#status").get_attribute("data-state"),
+                "result_count": self._page.locator("#results tbody tr").count()
+                if self._page.locator("#results").is_visible()
+                else 0,
                 "download_visible": self._page.locator("#download").is_visible(),
                 "download_path": str(self.download),
                 "download_exists": self.download.exists(),
@@ -97,26 +102,79 @@ class EdgeProductTask:
         self, observation: Observation, history: Sequence[StepResult]
     ) -> Sequence[ActionCandidate]:
         state = observation.state
+        pending: list[ActionCandidate] = []
         if state["query"] != "laptop":
-            return (
-                ActionCandidate(
-                    "gui_fill_category",
-                    Channel.GUI,
-                    "edge.fill",
-                    "Fill the category input through Playwright's user-facing input action.",
-                    {"selector": "#query", "text": "laptop"},
-                    Risk.LOCAL_WRITE,
-                ),
-                ActionCandidate(
-                    "script_fill_category",
-                    Channel.SCRIPT,
-                    "edge.dom_set_value",
-                    "Set the DOM value and dispatch an input event without pointer interaction.",
-                    {"selector": "#query", "text": "laptop"},
-                    Risk.LOCAL_WRITE,
-                ),
+            pending.extend(
+                (
+                    ActionCandidate(
+                        "gui_fill_category",
+                        Channel.GUI,
+                        "edge.fill",
+                        "Fill the category input through Playwright's user-facing input action.",
+                        {"selector": "#query", "text": "laptop"},
+                        Risk.LOCAL_WRITE,
+                        intent="set_category",
+                    ),
+                    ActionCandidate(
+                        "script_fill_category",
+                        Channel.SCRIPT,
+                        "edge.dom_set_value",
+                        "Set the DOM value and dispatch an input event without pointer interaction.",
+                        {"selector": "#query", "text": "laptop"},
+                        Risk.LOCAL_WRITE,
+                        intent="set_category",
+                    ),
+                )
             )
-        if state["status"] != "complete":
+        if state["max_price"] != "1200":
+            pending.extend(
+                (
+                    ActionCandidate(
+                        "gui_fill_max_price",
+                        Channel.GUI,
+                        "edge.fill",
+                        "Enter the maximum price through the visible input.",
+                        {"selector": "#max-price", "text": "1200"},
+                        Risk.LOCAL_WRITE,
+                        intent="set_budget",
+                    ),
+                    ActionCandidate(
+                        "script_fill_max_price",
+                        Channel.SCRIPT,
+                        "edge.dom_set_value",
+                        "Set the maximum price and dispatch an input event.",
+                        {"selector": "#max-price", "text": "1200"},
+                        Risk.LOCAL_WRITE,
+                        intent="set_budget",
+                    ),
+                )
+            )
+        if not state["in_stock"]:
+            pending.extend(
+                (
+                    ActionCandidate(
+                        "gui_enable_in_stock",
+                        Channel.GUI,
+                        "edge.check",
+                        "Enable the in-stock filter through the visible checkbox.",
+                        {"selector": "#in-stock"},
+                        Risk.LOCAL_WRITE,
+                        intent="require_availability",
+                    ),
+                    ActionCandidate(
+                        "script_enable_in_stock",
+                        Channel.SCRIPT,
+                        "edge.dom_set_checked",
+                        "Set the availability checkbox and dispatch a change event.",
+                        {"selector": "#in-stock", "checked": True},
+                        Risk.LOCAL_WRITE,
+                        intent="require_availability",
+                    ),
+                )
+            )
+        if pending:
+            return tuple(pending)
+        if state["status"] not in {"review", "complete"}:
             return (
                 ActionCandidate(
                     "gui_apply_filter",
@@ -125,6 +183,7 @@ class EdgeProductTask:
                     "Click Filter through the visible Playwright pointer action.",
                     {"selector": "#filter"},
                     Risk.LOCAL_WRITE,
+                    intent="search_catalog",
                 ),
                 ActionCandidate(
                     "script_apply_filter",
@@ -133,6 +192,28 @@ class EdgeProductTask:
                     "Dispatch the filter button click directly through the DOM.",
                     {"selector": "#filter"},
                     Risk.LOCAL_WRITE,
+                    intent="search_catalog",
+                ),
+            )
+        if state["status"] == "review":
+            return (
+                ActionCandidate(
+                    "gui_confirm_results",
+                    Channel.GUI,
+                    "edge.click",
+                    "Confirm the two visible matching products.",
+                    {"selector": "#confirm"},
+                    Risk.LOCAL_WRITE,
+                    intent="review_results",
+                ),
+                ActionCandidate(
+                    "script_confirm_results",
+                    Channel.SCRIPT,
+                    "edge.dom_dispatch_click",
+                    "Confirm the reviewed result set through a DOM event.",
+                    {"selector": "#confirm"},
+                    Risk.LOCAL_WRITE,
+                    intent="review_results",
                 ),
             )
         if not state["download_exists"]:
@@ -146,6 +227,7 @@ class EdgeProductTask:
                     Risk.LOCAL_WRITE,
                     verifier="file.contains",
                     expected={"path": str(self.download), "contains": "ThinkPad,laptop,999"},
+                    intent="export_results",
                 ),
                 ActionCandidate(
                     "api_download_csv",
@@ -156,17 +238,20 @@ class EdgeProductTask:
                     Risk.LOCAL_WRITE,
                     verifier="file.contains",
                     expected={"path": str(self.download), "contains": "ThinkPad,laptop,999"},
+                    intent="export_results",
                 ),
             )
         return (
             ActionCandidate(
-                "done", Channel.CONTROL, "control.done", "Declare completion after export verification."
+                "done",
+                Channel.CONTROL,
+                "control.done",
+                "Declare completion after export verification.",
+                intent="finish",
             ),
         )
 
-    def __call__(
-        self, candidate: ActionCandidate, observation_id: str, decision_id: str
-    ) -> ActionReceipt:
+    def __call__(self, candidate: ActionCandidate, observation_id: str, decision_id: str) -> ActionReceipt:
         def operation() -> dict[str, Any]:
             if self._page is None:
                 raise RuntimeError("Edge page is unavailable")
@@ -178,6 +263,14 @@ class EdgeProductTask:
                     "(element, value) => { element.value = value; "
                     "element.dispatchEvent(new Event('input', {bubbles: true})); }",
                     candidate.arguments["text"],
+                )
+            elif candidate.capability == "edge.check":
+                self._page.locator(selector).check()
+            elif candidate.capability == "edge.dom_set_checked":
+                self._page.locator(selector).evaluate(
+                    "(element, checked) => { element.checked = checked; "
+                    "element.dispatchEvent(new Event('change', {bubbles: true})); }",
+                    bool(candidate.arguments["checked"]),
                 )
             elif candidate.capability == "edge.click":
                 self._page.locator(selector).click()
@@ -212,7 +305,8 @@ class EdgeProductTask:
             return Evaluation(False, False, "browser_action_not_verified")
         if candidate.capability != "control.done":
             return Evaluation(False, False, "browser_step_completed; reobserve")
-        valid = self.download.is_file() and "ThinkPad,laptop,999" in self.download.read_text("utf-8")
+        payload = self.download.read_text("utf-8") if self.download.is_file() else ""
+        valid = "ThinkPad,laptop,999,true" in payload and "Surface,laptop,1099,true" in payload
         return Evaluation(valid, True, "edge_export_verified" if valid else "edge_export_invalid")
 
 
@@ -221,20 +315,24 @@ class ExcelSalesTask:
 
     name = "excel-sales-summary"
 
-    def __init__(self, workspace: str | Path) -> None:
+    def __init__(self, workspace: str | Path, *, visible: bool = False) -> None:
         self.workspace = Path(workspace).resolve()
         self.workbook = self.workspace / "sales.xlsx"
+        self.visible = visible
 
     @property
     def allowed_roots(self) -> tuple[Path, ...]:
         return (self.workspace,)
 
     def executor_bindings(self) -> dict[Channel, object]:
-        return {
+        bindings = {
             Channel.SCRIPT: ExcelComExecutor(visible=False),
             Channel.API: OpenPyxlExecutor(),
             Channel.CONTROL: ControlExecutor(),
         }
+        if self.visible:
+            bindings[Channel.GUI] = ExcelComExecutor(visible=True)
+        return bindings
 
     @staticmethod
     def _excel_modules():
@@ -269,7 +367,12 @@ class ExcelSalesTask:
                 ("Monitor", 80),
                 ("Keyboard", 100),
             )
-            summary.Range("A1:B2").Value = (("Metric", "Value"), ("Total revenue", None))
+            summary.Range("A1:B4").Value = (
+                ("Metric", "Value"),
+                ("Total revenue", None),
+                ("Average revenue", None),
+                ("Review status", None),
+            )
             book.SaveAs(str(self.workbook), 51)
         finally:
             del data, summary
@@ -295,6 +398,9 @@ class ExcelSalesTask:
             summary = book.Worksheets("Summary")
             value = summary.Range("B2").Value
             formula = summary.Range("B2").Formula
+            average = summary.Range("B3").Value
+            average_formula = summary.Range("B3").Formula
+            review_status = summary.Range("B4").Value
             charts = sum(book.Worksheets(i).ChartObjects().Count for i in range(1, book.Worksheets.Count + 1))
         finally:
             del summary
@@ -308,11 +414,16 @@ class ExcelSalesTask:
             pythoncom.CoUninitialize()
         return Observation(
             task="Calculate total sales revenue and create a product revenue chart.",
-            subgoal="Verify workbook" if value == 300 and charts else "Complete the workbook",
+            subgoal="Verify workbook"
+            if value == 300 and average == 100 and charts and review_status == "Reviewed"
+            else "Choose the next incomplete workbook operation",
             state={
                 "workbook_path": str(self.workbook),
                 "summary_value": value,
                 "summary_formula": formula,
+                "average_value": average,
+                "average_formula": average_formula,
+                "review_status": review_status,
                 "chart_count": charts,
             },
             source=self.name,
@@ -322,70 +433,121 @@ class ExcelSalesTask:
         self, observation: Observation, history: Sequence[StepResult]
     ) -> Sequence[ActionCandidate]:
         state = observation.state
+        pending: list[ActionCandidate] = []
+
+        def add_cell_routes(intent: str, suffix: str, cell: str, *, formula=None, value=None) -> None:
+            com_args = {"workbook_path": str(self.workbook), "sheet": "Summary", "range": cell}
+            file_args = {"workbook_path": str(self.workbook), "sheet": "Summary", "cell": cell}
+            if formula is not None:
+                com_args["formula"] = formula
+                file_args["formula"] = formula
+                file_capability = "excel.file_write_formula"
+            else:
+                com_args["value"] = value
+                file_args["value"] = value
+                file_capability = "excel.file_write_value"
+            if self.visible:
+                pending.append(
+                    ActionCandidate(
+                        f"gui_{suffix}",
+                        Channel.GUI,
+                        "excel.write_range",
+                        f"Complete {intent} in a visible Excel window.",
+                        com_args,
+                        Risk.LOCAL_WRITE,
+                        intent=intent,
+                    )
+                )
+            pending.extend(
+                (
+                    ActionCandidate(
+                        f"com_{suffix}",
+                        Channel.SCRIPT,
+                        "excel.write_range",
+                        f"Complete {intent} through background Excel COM.",
+                        com_args,
+                        Risk.LOCAL_WRITE,
+                        intent=intent,
+                    ),
+                    ActionCandidate(
+                        f"file_{suffix}",
+                        Channel.API,
+                        file_capability,
+                        f"Complete {intent} through the workbook file API.",
+                        file_args,
+                        Risk.LOCAL_WRITE,
+                        intent=intent,
+                    ),
+                )
+            )
+
         if state["summary_value"] != 300:
-            return (
-                ActionCandidate(
-                    "com_write_summary_formula",
-                    Channel.SCRIPT,
-                    "excel.write_range",
-                    "Write the SUM formula through a live Excel COM process.",
-                    {
-                        "workbook_path": str(self.workbook),
-                        "sheet": "Summary",
-                        "range": "B2",
-                        "formula": "=SUM(Data!B2:B4)",
-                    },
-                    Risk.LOCAL_WRITE,
-                ),
-                ActionCandidate(
-                    "file_write_summary_formula",
-                    Channel.API,
-                    "excel.file_write_formula",
-                    "Write the SUM formula directly into the workbook file through openpyxl.",
-                    {
-                        "workbook_path": str(self.workbook),
-                        "sheet": "Summary",
-                        "cell": "B2",
-                        "formula": "=SUM(Data!B2:B4)",
-                    },
-                    Risk.LOCAL_WRITE,
-                ),
+            add_cell_routes("calculate_total", "write_total_formula", "B2", formula="=SUM(Data!B2:B4)")
+        if state["average_value"] != 100:
+            add_cell_routes(
+                "calculate_average", "write_average_formula", "B3", formula="=AVERAGE(Data!B2:B4)"
             )
+        if state["review_status"] != "Reviewed":
+            add_cell_routes("mark_reviewed", "mark_reviewed", "B4", value="Reviewed")
         if state["chart_count"] < 1:
-            return (
-                ActionCandidate(
-                    "com_create_revenue_chart",
-                    Channel.SCRIPT,
-                    "excel.create_chart",
-                    "Create the chart through a live Excel COM process.",
-                    {
-                        "workbook_path": str(self.workbook),
-                        "sheet": "Data",
-                        "range": "A1:B4",
-                        "title": "Revenue by product",
-                    },
-                    Risk.LOCAL_WRITE,
-                ),
-                ActionCandidate(
-                    "file_create_revenue_chart",
-                    Channel.API,
-                    "excel.file_create_chart",
-                    "Create the chart directly in the workbook file through openpyxl.",
-                    {
-                        "workbook_path": str(self.workbook),
-                        "sheet": "Data",
-                        "max_row": 4,
-                        "title": "Revenue by product",
-                        "x_axis_title": "Product",
-                        "y_axis_title": "Revenue",
-                        "anchor": "D2",
-                    },
-                    Risk.LOCAL_WRITE,
-                ),
+            com_args = {
+                "workbook_path": str(self.workbook),
+                "sheet": "Data",
+                "range": "A1:B4",
+                "title": "Revenue by product",
+            }
+            file_args = {
+                "workbook_path": str(self.workbook),
+                "sheet": "Data",
+                "max_row": 4,
+                "title": "Revenue by product",
+                "x_axis_title": "Product",
+                "y_axis_title": "Revenue",
+                "anchor": "D2",
+            }
+            if self.visible:
+                pending.append(
+                    ActionCandidate(
+                        "gui_create_revenue_chart",
+                        Channel.GUI,
+                        "excel.create_chart",
+                        "Create the chart in a visible Excel window.",
+                        com_args,
+                        Risk.LOCAL_WRITE,
+                        intent="visualize_revenue",
+                    )
+                )
+            pending.extend(
+                (
+                    ActionCandidate(
+                        "com_create_revenue_chart",
+                        Channel.SCRIPT,
+                        "excel.create_chart",
+                        "Create the chart through background Excel COM.",
+                        com_args,
+                        Risk.LOCAL_WRITE,
+                        intent="visualize_revenue",
+                    ),
+                    ActionCandidate(
+                        "file_create_revenue_chart",
+                        Channel.API,
+                        "excel.file_create_chart",
+                        "Create the chart through the workbook file API.",
+                        file_args,
+                        Risk.LOCAL_WRITE,
+                        intent="visualize_revenue",
+                    ),
+                )
             )
+        if pending:
+            return tuple(pending)
         return (
             ActionCandidate(
-                "done", Channel.CONTROL, "control.done", "Declare completion after workbook inspection."
+                "done",
+                Channel.CONTROL,
+                "control.done",
+                "Declare completion after workbook inspection.",
+                intent="finish",
             ),
         )
 
@@ -402,15 +564,25 @@ class ExcelSalesTask:
             return Evaluation(False, False, "excel_step_completed; reobserve")
         state = self.observe(())
         formula = str(state.state["summary_formula"]).upper()
-        valid = state.state["summary_value"] == 300 and "SUM(" in formula and state.state["chart_count"] >= 1
+        valid = (
+            state.state["summary_value"] == 300
+            and "SUM(" in formula
+            and state.state["average_value"] == 100
+            and "AVERAGE(" in str(state.state["average_formula"]).upper()
+            and state.state["review_status"] == "Reviewed"
+            and state.state["chart_count"] >= 1
+        )
         return Evaluation(valid, True, "excel_workbook_verified" if valid else "excel_workbook_invalid")
 
 
 class VSCodeTerminalTask:
-    """Open a tiny project, repair a failing function, and verify it with a real test process."""
+    """Diagnose and repair two independent defects, rerunning tests after each mutation."""
 
     name = "vscode-terminal-repair"
-    corrected_source = "def add(left, right):\n    return left + right\n"
+    corrected_source = (
+        "def add(left, right):\n    return left + right\n\n\n"
+        "def multiply(left, right):\n    return left * right\n"
+    )
 
     def __init__(self, workspace: str | Path, *, open_vscode: bool = False) -> None:
         self.workspace = Path(workspace).resolve()
@@ -418,6 +590,7 @@ class VSCodeTerminalTask:
         self.test_file = self.workspace / "test_calc.py"
         self.open_vscode = open_vscode
         self.opened = False
+        self.last_test: dict[str, Any] | None = None
 
     @property
     def allowed_roots(self) -> tuple[Path, ...]:
@@ -441,6 +614,7 @@ class VSCodeTerminalTask:
             Channel.API: FileSystemExecutor(),
             Channel.MCP: sandbox_mcp_executor(),
             Channel.CLI: cli,
+            Channel.SCRIPT: self,
             Channel.CONTROL: ControlExecutor(),
         }
         if self.open_vscode:
@@ -449,17 +623,24 @@ class VSCodeTerminalTask:
 
     def reset(self) -> None:
         self.workspace.mkdir(parents=True, exist_ok=True)
-        self.source.write_text("def add(left, right):\n    return left - right\n", encoding="utf-8")
+        self.source.write_text(
+            "def add(left, right):\n    return left - right\n\n\n"
+            "def multiply(left, right):\n    return left + right\n",
+            encoding="utf-8",
+        )
         self.test_file.write_text(
-            "import unittest\n\nfrom calc import add\n\n\n"
+            "import unittest\n\nfrom calc import add, multiply\n\n\n"
             "class CalcTest(unittest.TestCase):\n"
             "    def test_add(self):\n"
             "        self.assertEqual(add(2, 3), 5)\n\n"
+            "    def test_multiply(self):\n"
+            "        self.assertEqual(multiply(3, 4), 12)\n\n"
             "if __name__ == '__main__':\n"
             "    unittest.main()\n",
             encoding="utf-8",
         )
         self.opened = not self.open_vscode
+        self.last_test = None
 
     def _test(self) -> subprocess.CompletedProcess[str]:
         cache = self.workspace / "__pycache__"
@@ -476,18 +657,28 @@ class VSCodeTerminalTask:
         )
 
     def observe(self, history: Sequence[StepResult]) -> Observation:
-        test = self._test()
+        source = self.source.read_text(encoding="utf-8")
+        test = self.last_test or {"returncode": None, "stdout": "", "stderr": "not run"}
         return Observation(
-            task="Repair the calculator project until its test suite passes.",
-            subgoal="Verify completion" if test.returncode == 0 else "Diagnose and repair the failing test",
+            task=(
+                "Diagnose two independent calculator defects, repair them through "
+                "safe tools, and prove both tests pass."
+            ),
+            subgoal="Run the test suite"
+            if test["returncode"] is None
+            else "Choose a remaining defect and repair route"
+            if test["returncode"]
+            else "Verify completion",
             state={
                 "workspace": str(self.workspace),
                 "source_path": str(self.source),
-                "source": self.source.read_text(encoding="utf-8"),
+                "source": source,
+                "add_fixed": "return left + right" in source,
+                "multiply_fixed": "return left * right" in source,
                 "vscode_opened": self.opened,
-                "test_returncode": test.returncode,
-                "test_stdout": test.stdout[-2000:],
-                "test_stderr": test.stderr[-2000:],
+                "test_returncode": test["returncode"],
+                "test_stdout": test["stdout"][-2000:],
+                "test_stderr": test["stderr"][-2000:],
             },
             source=self.name,
         )
@@ -505,52 +696,119 @@ class VSCodeTerminalTask:
                     {"path": str(self.workspace)},
                 ),
             )
-        if observation.state["test_returncode"]:
-            common = {
-                "path": str(self.source),
-                "text": self.corrected_source,
-            }
+        if observation.state["test_returncode"] is None:
             return (
                 ActionCandidate(
-                    "mcp_repair",
-                    Channel.MCP,
-                    "mcp.filesystem.write_text",
-                    "Repair calc.py through the filesystem MCP tool.",
-                    common,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected={"path": str(self.source), "contains": "return left + right"},
-                ),
-                ActionCandidate(
-                    "api_repair",
-                    Channel.API,
-                    "filesystem.write_text",
-                    "Repair calc.py through the typed filesystem API.",
-                    common,
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected={"path": str(self.source), "contains": "return left + right"},
-                ),
-                ActionCandidate(
-                    "cli_repair",
-                    Channel.CLI,
-                    "cli.replace_exact",
-                    "Repair only the faulty expression through an allowlisted CLI patch command.",
-                    {
-                        "path": str(self.source),
-                        "old": "return left - right",
-                        "new": "return left + right",
-                    },
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected={"path": str(self.source), "contains": "return left + right"},
+                    "run_tests",
+                    Channel.SCRIPT,
+                    "tests.run",
+                    "Run both unit tests in an isolated Python process and capture the failure evidence.",
+                    {"cwd": str(self.workspace)},
+                    intent="diagnose" if not history else "validate_repairs",
                 ),
             )
+        if observation.state["test_returncode"]:
+            pending: list[ActionCandidate] = []
+
+            def add_repair_routes(
+                intent: str, suffix: str, old: str, new: str, replacement_line: str, line: int
+            ) -> None:
+                updated = observation.state["source"].replace(old, new)
+                common = {"path": str(self.source), "text": updated}
+                expected = {"path": str(self.source), "contains": replacement_line.strip()}
+                pending.extend(
+                    (
+                        ActionCandidate(
+                            f"mcp_{suffix}",
+                            Channel.MCP,
+                            "mcp.filesystem.write_text",
+                            f"Repair {intent} through MCP.",
+                            common,
+                            Risk.LOCAL_WRITE,
+                            verifier="file.contains",
+                            expected=expected,
+                            intent=intent,
+                        ),
+                        ActionCandidate(
+                            f"api_{suffix}",
+                            Channel.API,
+                            "filesystem.write_text",
+                            f"Repair {intent} through the typed filesystem API.",
+                            common,
+                            Risk.LOCAL_WRITE,
+                            verifier="file.contains",
+                            expected=expected,
+                            intent=intent,
+                        ),
+                        ActionCandidate(
+                            f"cli_{suffix}",
+                            Channel.CLI,
+                            "cli.replace_exact",
+                            f"Repair {intent} through an argv-only exact patch.",
+                            {"path": str(self.source), "old": old, "new": new},
+                            Risk.LOCAL_WRITE,
+                            verifier="file.contains",
+                            expected=expected,
+                            intent=intent,
+                        ),
+                    )
+                )
+                if self.open_vscode:
+                    pending.append(
+                        ActionCandidate(
+                            f"gui_{suffix}",
+                            Channel.GUI,
+                            "vscode.uia_replace_line",
+                            f"Repair {intent} visibly in the VS Code editor.",
+                            {"path": str(self.source), "line": line, "text": replacement_line},
+                            Risk.LOCAL_WRITE,
+                            verifier="file.contains",
+                            expected=expected,
+                            intent=intent,
+                        )
+                    )
+
+            if not observation.state["add_fixed"]:
+                add_repair_routes(
+                    "repair_addition",
+                    "repair_add",
+                    "def add(left, right):\n    return left - right",
+                    "def add(left, right):\n    return left + right",
+                    "    return left + right",
+                    2,
+                )
+            if not observation.state["multiply_fixed"]:
+                add_repair_routes(
+                    "repair_multiplication",
+                    "repair_multiply",
+                    "def multiply(left, right):\n    return left + right",
+                    "def multiply(left, right):\n    return left * right",
+                    "    return left * right",
+                    6,
+                )
+            return tuple(pending)
         return (
             ActionCandidate(
-                "done", Channel.CONTROL, "control.done", "Declare completion after tests pass."
+                "done",
+                Channel.CONTROL,
+                "control.done",
+                "Declare completion only after both tests pass.",
+                intent="finish",
             ),
         )
+
+    def __call__(self, candidate: ActionCandidate, observation_id: str, decision_id: str) -> ActionReceipt:
+        def operation() -> dict[str, Any]:
+            if candidate.capability != "tests.run":
+                raise ValueError(f"unsupported task capability: {candidate.capability}")
+            completed = self._test()
+            return {
+                "returncode": completed.returncode,
+                "stdout": completed.stdout[-20_000:],
+                "stderr": completed.stderr[-5_000:],
+            }
+
+        return execute_with_receipt(candidate, observation_id, decision_id, operation)
 
     def evaluate(
         self,
@@ -564,7 +822,12 @@ class VSCodeTerminalTask:
         if candidate.capability == "vscode.open":
             self.opened = True
             return Evaluation(False, False, "project_opened; reobserve")
+        if candidate.capability == "tests.run":
+            self.last_test = dict(receipt.output)
+            reason = "test_suite_passed" if receipt.output["returncode"] == 0 else "test_failures_captured"
+            return Evaluation(False, False, reason, {"returncode": receipt.output["returncode"]})
         if candidate.capability != "control.done":
+            self.last_test = None
             return Evaluation(False, False, "repair_written; rerun_tests")
         passed = self._test().returncode == 0 and self.source.read_text("utf-8") == self.corrected_source
         return Evaluation(passed, True, "test_suite_verified" if passed else "test_suite_failed")
@@ -574,15 +837,20 @@ SUITE_NAMES = ("edge", "excel", "vscode", "explorer")
 
 
 def make_suite(
-    name: str, workspace: str | Path, *, headed_edge: bool = False, open_vscode: bool = False
+    name: str,
+    workspace: str | Path,
+    *,
+    headed_edge: bool = False,
+    open_vscode: bool = False,
+    visible_apps: bool = False,
 ):
     root = Path(workspace).resolve() / name
     if name == "edge":
         return EdgeProductTask(root, headless=not headed_edge)
     if name == "excel":
-        return ExcelSalesTask(root)
+        return ExcelSalesTask(root, visible=visible_apps)
     if name == "vscode":
         return VSCodeTerminalTask(root, open_vscode=open_vscode)
     if name == "explorer":
-        return FileOrganizationTask(root)
+        return FileOrganizationTask(root, visible=visible_apps)
     raise ValueError(f"unknown suite: {name}")

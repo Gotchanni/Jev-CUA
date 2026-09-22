@@ -6,7 +6,13 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .episode import Evaluation
-from .executors import ControlExecutor, FileSystemExecutor, InProcessMcpExecutor, RegisteredCliExecutor
+from .executors import (
+    ControlExecutor,
+    ExplorerUiaExecutor,
+    FileSystemExecutor,
+    InProcessMcpExecutor,
+    RegisteredCliExecutor,
+)
 from .models import ActionCandidate, ActionReceipt, Channel, Observation, Risk, Verification
 from .runtime import StepResult
 
@@ -35,23 +41,36 @@ def sandbox_mcp_executor() -> InProcessMcpExecutor:
 
 
 class FileOrganizationTask:
-    """A resettable two-step fixture: copy a report, then independently declare completion."""
+    """Select two publishable reports, archive them, then build and verify a manifest."""
 
     name = "explorer-organize-fixture"
 
-    def __init__(self, workspace: str | Path) -> None:
+    def __init__(self, workspace: str | Path, *, visible: bool = False) -> None:
         self.workspace = Path(workspace).resolve()
         self.inbox = self.workspace / "inbox"
         self.archive = self.workspace / "archive"
-        self.source = self.inbox / "sales.txt"
-        self.destination = self.archive / "sales.txt"
+        self.visible = visible
+        self.sources = {
+            "sales": self.inbox / "sales-Q3.txt",
+            "inventory": self.inbox / "inventory-Q3.txt",
+        }
+        self.destinations = {name: self.archive / path.name for name, path in self.sources.items()}
+        self.manifest = self.archive / "manifest.txt"
 
     def reset(self) -> None:
         self.inbox.mkdir(parents=True, exist_ok=True)
         self.archive.mkdir(parents=True, exist_ok=True)
-        self.source.write_text("quarter=Q3\nrevenue=120\n", encoding="utf-8")
-        if self.destination.exists():
-            self.destination.unlink()
+        fixtures = {
+            "sales-Q3.txt": "quarter=Q3\nrevenue=120\nstatus=final\n",
+            "inventory-Q3.txt": "quarter=Q3\nitems=42\nstatus=final\n",
+            "draft-notes.txt": "status=draft\ndo_not_publish=true\n",
+            "sales-Q2.txt": "quarter=Q2\nstatus=final\n",
+        }
+        for name, content in fixtures.items():
+            (self.inbox / name).write_text(content, encoding="utf-8")
+        for path in (*self.destinations.values(), self.manifest):
+            if path.exists():
+                path.unlink()
 
     @property
     def allowed_roots(self) -> tuple[Path, ...]:
@@ -70,25 +89,47 @@ class FileOrganizationTask:
                 args["destination_path"],
             ],
         )
-        return {
+        cli.register(
+            "cli.write_text",
+            lambda args: [
+                sys.executable,
+                "-m",
+                "cua_jev.tools",
+                "write-text",
+                args["path"],
+                args["text"],
+            ],
+        )
+        bindings: dict[Channel, object] = {
             Channel.API: FileSystemExecutor(),
             Channel.MCP: sandbox_mcp_executor(),
             Channel.CLI: cli,
             Channel.CONTROL: ControlExecutor(),
         }
+        if self.visible:
+            bindings[Channel.GUI] = ExplorerUiaExecutor()
+        return bindings
 
     def observe(self, history: Sequence[StepResult]) -> Observation:
-        destination_exists = self.destination.exists()
-        destination_text = self.destination.read_text(encoding="utf-8") if destination_exists else None
+        archived = {name: path.exists() for name, path in self.destinations.items()}
+        manifest_text = self.manifest.read_text(encoding="utf-8") if self.manifest.exists() else None
         return Observation(
-            task="Archive the sales report without modifying its content.",
-            subgoal="Confirm completion" if destination_exists else "Copy the report into archive",
+            task=(
+                "Archive only the two final Q3 reports, exclude drafts and prior "
+                "quarters, then write a manifest."
+            ),
+            subgoal=(
+                "Confirm completion"
+                if all(archived.values()) and manifest_text
+                else "Choose the next eligible report or create the manifest"
+            ),
             state={
-                "source_path": str(self.source),
-                "destination_path": str(self.destination),
-                "source_exists": self.source.exists(),
-                "destination_exists": destination_exists,
-                "destination_text": destination_text,
+                "inbox": {
+                    path.name: path.read_text(encoding="utf-8") for path in sorted(self.inbox.iterdir())
+                },
+                "archived": archived,
+                "manifest_path": str(self.manifest),
+                "manifest_text": manifest_text,
             },
             source=self.name,
         )
@@ -96,45 +137,113 @@ class FileOrganizationTask:
     def candidates(
         self, observation: Observation, history: Sequence[StepResult]
     ) -> Sequence[ActionCandidate]:
-        if observation.state["destination_exists"]:
+        pending: list[ActionCandidate] = []
+        for name, source in self.sources.items():
+            if observation.state["archived"][name]:
+                continue
+            destination = self.destinations[name]
+            args = {"source_path": str(source), "destination_path": str(destination)}
+            expected = {"path": str(destination)}
+            intent = f"archive_{name}_report"
+            pending.extend(
+                (
+                    ActionCandidate(
+                        f"mcp_copy_{name}",
+                        Channel.MCP,
+                        "mcp.filesystem.copy",
+                        f"Archive the {name} report through MCP.",
+                        args,
+                        Risk.LOCAL_WRITE,
+                        verifier="file.exists",
+                        expected=expected,
+                        intent=intent,
+                    ),
+                    ActionCandidate(
+                        f"api_copy_{name}",
+                        Channel.API,
+                        "filesystem.copy",
+                        f"Archive the {name} report through the filesystem API.",
+                        args,
+                        Risk.LOCAL_WRITE,
+                        verifier="file.exists",
+                        expected=expected,
+                        intent=intent,
+                    ),
+                    ActionCandidate(
+                        f"cli_copy_{name}",
+                        Channel.CLI,
+                        "cli.copy_file",
+                        f"Archive the {name} report through an argv-only tool.",
+                        args,
+                        Risk.LOCAL_WRITE,
+                        verifier="file.exists",
+                        expected=expected,
+                        intent=intent,
+                    ),
+                )
+            )
+            if self.visible:
+                pending.append(
+                    ActionCandidate(
+                        f"gui_copy_{name}",
+                        Channel.GUI,
+                        "explorer.uia_copy",
+                        f"Archive the {name} report visibly in Windows Explorer.",
+                        args,
+                        Risk.LOCAL_WRITE,
+                        verifier="file.exists",
+                        expected=expected,
+                        intent=intent,
+                    )
+                )
+        if pending:
+            return tuple(pending)
+        manifest_text = "sales-Q3.txt\ninventory-Q3.txt\n"
+        if observation.state["manifest_text"] != manifest_text:
+            args = {"path": str(self.manifest), "text": manifest_text}
+            expected = {"path": str(self.manifest), "contains": "inventory-Q3.txt"}
             return (
                 ActionCandidate(
-                    "done",
-                    Channel.CONTROL,
-                    "control.done",
-                    "Declare completion for independent task verification.",
+                    "mcp_write_manifest",
+                    Channel.MCP,
+                    "mcp.filesystem.write_text",
+                    "Write the archive manifest through MCP.",
+                    args,
+                    Risk.LOCAL_WRITE,
+                    verifier="file.contains",
+                    expected=expected,
+                    intent="write_manifest",
+                ),
+                ActionCandidate(
+                    "api_write_manifest",
+                    Channel.API,
+                    "filesystem.write_text",
+                    "Write the archive manifest through the filesystem API.",
+                    args,
+                    Risk.LOCAL_WRITE,
+                    verifier="file.contains",
+                    expected=expected,
+                    intent="write_manifest",
+                ),
+                ActionCandidate(
+                    "cli_write_manifest",
+                    Channel.CLI,
+                    "cli.write_text",
+                    "Write the archive manifest through an argv-only tool.",
+                    args,
+                    Risk.LOCAL_WRITE,
+                    verifier="file.contains",
+                    expected=expected,
+                    intent="write_manifest",
                 ),
             )
         return (
             ActionCandidate(
-                "mcp_copy",
-                Channel.MCP,
-                "mcp.filesystem.copy",
-                "Copy the report through the registered filesystem MCP tool.",
-                {"source_path": str(self.source), "destination_path": str(self.destination)},
-                Risk.LOCAL_WRITE,
-                verifier="file.exists",
-                expected={"path": str(self.destination)},
-            ),
-            ActionCandidate(
-                "api_copy",
-                Channel.API,
-                "filesystem.copy",
-                "Copy the report through the typed filesystem API.",
-                {"source_path": str(self.source), "destination_path": str(self.destination)},
-                Risk.LOCAL_WRITE,
-                verifier="file.exists",
-                expected={"path": str(self.destination)},
-            ),
-            ActionCandidate(
-                "cli_copy",
-                Channel.CLI,
-                "cli.copy_file",
-                "Copy the report through an allowlisted argv-only CLI command.",
-                {"source_path": str(self.source), "destination_path": str(self.destination)},
-                Risk.LOCAL_WRITE,
-                verifier="file.exists",
-                expected={"path": str(self.destination)},
+                "done",
+                Channel.CONTROL,
+                "control.done",
+                "Declare completion after manifest and byte-level verification.",
+                intent="finish",
             ),
         )
 
@@ -148,7 +257,16 @@ class FileOrganizationTask:
         if not receipt.success or not verification.passed:
             return Evaluation(False, False, "action_not_verified")
         if candidate.capability != "control.done":
-            return Evaluation(False, False, "copy_completed; reobserve")
-        expected = self.source.read_bytes()
-        valid = self.destination.exists() and self.destination.read_bytes() == expected
+            return Evaluation(False, False, "organization_step_completed; reobserve")
+        valid = all(
+            self.destinations[name].exists()
+            and self.destinations[name].read_bytes() == self.sources[name].read_bytes()
+            for name in self.sources
+        )
+        valid = valid and self.manifest.read_text(encoding="utf-8") == ("sales-Q3.txt\ninventory-Q3.txt\n")
+        valid = (
+            valid
+            and not (self.archive / "draft-notes.txt").exists()
+            and not (self.archive / "sales-Q2.txt").exists()
+        )
         return Evaluation(valid, True, "archive_verified" if valid else "archive_content_mismatch")

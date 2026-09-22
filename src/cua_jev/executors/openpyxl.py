@@ -10,9 +10,7 @@ from .common import execute_with_receipt
 class OpenPyxlExecutor:
     """Direct workbook-file operations that do not require a running Excel process."""
 
-    def __call__(
-        self, candidate: ActionCandidate, observation_id: str, decision_id: str
-    ) -> ActionReceipt:
+    def __call__(self, candidate: ActionCandidate, observation_id: str, decision_id: str) -> ActionReceipt:
         def operation() -> dict[str, Any]:
             try:
                 from openpyxl import load_workbook
@@ -26,6 +24,8 @@ class OpenPyxlExecutor:
                 sheet = workbook[args["sheet"]]
                 if candidate.capability == "excel.file_write_formula":
                     sheet[args["cell"]] = args["formula"]
+                elif candidate.capability == "excel.file_write_value":
+                    sheet[args["cell"]] = args["value"]
                 elif candidate.capability == "excel.file_create_chart":
                     chart = BarChart()
                     chart.title = args.get("title", "Chart")

@@ -42,9 +42,10 @@
         </article>
 
         <article class="panel run-panel">
-          <div class="panel-head"><div><small>02 / POLICY</small><h2>运行配置</h2></div><span>one episode</span></div>
-          <fieldset class="segmented"><legend>决策策略</legend><label><input type="radio" name="policy" value="jev" checked><span>Jev</span></label><label><input type="radio" name="policy" value="rule"><span>Rule baseline</span></label></fieldset>
-          <div class="run-options"><label><input id="headed-edge" type="checkbox" checked><span><b>显示 Edge</b><small>用于录制 DOM 动作</small></span></label><label><input id="open-vscode" type="checkbox" checked><span><b>打开 VS Code</b><small>展示修复上下文</small></span></label></div>
+          <div class="panel-head"><div><small>02 / MODE</small><h2>运行配置</h2></div><span>one episode</span></div>
+          <fieldset class="segmented"><legend>运行模式</legend><label><input type="radio" name="mode" value="demo" checked><span>Jev Demo</span></label><label><input type="radio" name="mode" value="evaluation"><span>Evaluation</span></label></fieldset>
+          <fieldset id="evaluation-policy" class="segmented" hidden><legend>评测策略</legend><label><input type="radio" name="policy" value="jev" checked><span>Jev</span></label><label><input type="radio" name="policy" value="rule"><span>Rule baseline</span></label></fieldset>
+          <div class="run-options"><label><input id="visible-desktop" type="checkbox" checked><span><b>展示桌面应用</b><small>Edge、Excel、VS Code 或 Explorer 可见运行</small></span></label></div>
           <div class="route-summary"><span>候选路线</span><div id="selected-routes"></div></div>
           <button id="run-button" class="primary-button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg><span>启动实验</span></button>
           <button id="stop-button" class="stop-button" hidden>停止当前实验</button>
@@ -52,7 +53,7 @@
         </article>
 
         <article class="panel live-panel">
-          <div class="panel-head"><div><small>03 / LIVE TRACE</small><h2>闭环时间线</h2></div><span id="event-count">0 events</span></div>
+          <div class="panel-head"><div><small id="trace-kind">03 / WAITING</small><h2>闭环时间线</h2></div><span id="event-count">0 events</span></div>
           <div id="live-empty" class="empty-state"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17h3l2-7 4 10 2-6h5"/></svg><b>等待一次实验</b><span>Observation、Decision、Receipt 与 Verification 会在这里逐步出现。</span></div>
           <ol id="timeline" class="timeline" aria-live="polite"></ol>
         </article>

@@ -15,27 +15,27 @@ from ..suites import SUITE_NAMES
 TASK_CATALOG = {
     "edge": {
         "title": "Edge 商品筛选",
-        "description": "筛选 laptop 商品并导出经过内容校验的 CSV。",
-        "routes": ["GUI", "DOM Script", "Page API"],
-        "steps": 4,
+        "description": "设置类别、预算和库存约束，审核结果后导出 CSV。",
+        "routes": ["Visible Edge", "DOM Script", "Page API"],
+        "steps": 7,
     },
     "excel": {
         "title": "Excel 销售汇总",
-        "description": "写入公式、创建图表，并通过独立 Excel COM 会话复核。",
-        "routes": ["Excel COM", "Workbook API"],
-        "steps": 3,
+        "description": "完成总计、均值、复核状态和图表，再由独立 COM 会话验证。",
+        "routes": ["Visible Excel", "Excel COM", "Workbook API"],
+        "steps": 5,
     },
     "vscode": {
         "title": "VS Code 测试修复",
-        "description": "运行真实测试，在三条修复通道中选择并重新验证。",
-        "routes": ["MCP", "Filesystem API", "Allowlisted CLI"],
-        "steps": 2,
+        "description": "诊断两个独立缺陷，选择修复顺序和通道，并在每次修改后重跑测试。",
+        "routes": ["Visible VS Code", "MCP", "Filesystem API", "Allowlisted CLI"],
+        "steps": 7,
     },
     "explorer": {
         "title": "文件整理",
-        "description": "复制报告并进行字节级一致性检查。",
-        "routes": ["MCP", "Filesystem API", "Allowlisted CLI"],
-        "steps": 2,
+        "description": "从混合收件箱中选择两份合格报告、归档并生成清单。",
+        "routes": ["Visible Explorer", "MCP", "Filesystem API", "Allowlisted CLI"],
+        "steps": 4,
     },
 }
 
@@ -94,16 +94,16 @@ class RunManager:
                 "--trace",
                 str(trace),
             ]
-            if bool(spec.get("headed_edge")):
+            visible_desktop = bool(spec.get("visible_desktop"))
+            if visible_desktop:
                 argv.append("--headed-edge")
-            if bool(spec.get("open_vscode")):
                 argv.append("--open-vscode")
+                argv.append("--visible-apps")
             record = {
                 "id": run_id,
                 "task": task,
                 "policy": policy,
-                "headed_edge": bool(spec.get("headed_edge")),
-                "open_vscode": bool(spec.get("open_vscode")),
+                "visible_desktop": visible_desktop,
                 "status": "running",
                 "created_at": time.time(),
                 "updated_at": time.time(),
@@ -156,9 +156,7 @@ class RunManager:
         record["summary"] = self._read_json(summary_path) if summary_path.is_file() else None
         log_path = Path(record["log_path"])
         record["log"] = (
-            log_path.read_text(encoding="utf-8", errors="replace")[-20_000:]
-            if log_path.is_file()
-            else ""
+            log_path.read_text(encoding="utf-8", errors="replace")[-20_000:] if log_path.is_file() else ""
         )
         record["events"] = self._events(record)
         return record

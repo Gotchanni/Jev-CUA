@@ -26,7 +26,8 @@ def _criteria(candidates: Sequence[ActionCandidate]) -> dict[str, str]:
         raise PolicyError("candidate ids must be unique")
     return {
         candidate.id: (
-            f"{candidate.description} Channel={candidate.channel}; capability={candidate.capability}; "
+            f"Intent={candidate.intent}. {candidate.description} Channel={candidate.channel}; "
+            f"capability={candidate.capability}; "
             f"risk={candidate.risk}; preconditions={list(candidate.preconditions)}."
         )
         for candidate in candidates
@@ -82,7 +83,9 @@ class JevPolicy:
                     "type": "choice",
                     "criteria": criteria,
                     "instructions": (
-                        "Choose exactly one immediate action that best advances the current subgoal. "
+                        "Choose exactly one joint intent-and-execution action that best advances the current "
+                        "task. More than one subgoal may currently be legal; use state and recent actions to "
+                        "commit to the most useful one. "
                         "Use only the supplied state. Prefer a read-only, directly verifiable action "
                         "when alternatives are equivalent. Respect preconditions and never invent "
                         "an unavailable action."
