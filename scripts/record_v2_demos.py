@@ -138,7 +138,7 @@ def _update_state(state: dict[str, Any], detail: dict[str, Any]) -> None:
     events = detail.get("events") or []
     decisions = [event["payload"] for event in events if event.get("kind") == "decision"]
     receipts = [event["payload"] for event in events if event.get("kind") == "receipt"]
-    state["step"] = len(decisions)
+    state["step"] = int(detail.get("event_counts", {}).get("decision", len(decisions)))
     state["status"] = detail.get("status", "running")
     if decisions:
         state["candidate"] = decisions[-1].get("candidate_id", "decision")

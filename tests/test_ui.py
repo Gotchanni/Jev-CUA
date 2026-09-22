@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -6,6 +7,7 @@ pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 from cua_jev.ui.app import create_app
+from cua_jev.ui.manager import RunManager
 
 
 def test_console_bootstrap_and_local_security(tmp_path: Path) -> None:
@@ -79,3 +81,48 @@ def test_console_serves_brand_assets(tmp_path: Path) -> None:
             "hybrid": "/demos/edge-hybrid.mp4"
         }
         assert client.get("/demos/edge-hybrid.mp4").content == b"demo"
+
+
+def test_metrics_use_full_trace_while_detail_is_bounded(tmp_path: Path) -> None:
+    manager = RunManager(tmp_path, tmp_path / "runs")
+    run_id = "long-trace"
+    run_dir = tmp_path / "runs" / run_id
+    run_dir.mkdir()
+    trace_base = run_dir / "trace.jsonl"
+    events = [
+        {"timestamp": index, "kind": "receipt", "payload": {"channel": "gui", "duration_ms": 1}}
+        for index in range(115)
+    ]
+    events.extend(
+        {"timestamp": 200 + index, "kind": "decision", "payload": {"latency_ms": 1}}
+        for index in range(115)
+    )
+    events.append(
+        {
+            "timestamp": 400,
+            "kind": "episode",
+            "payload": {"duration_ms": 230, "status": "success"},
+        }
+    )
+    trace_base.with_name("trace-edge.jsonl").write_text(
+        "\n".join(json.dumps(event) for event in events),
+        encoding="utf-8",
+    )
+    record = {
+        "id": run_id,
+        "task": "edge",
+        "benchmark_version": "long-horizon-v2",
+        "policy": "jev",
+        "execution_profile": "adaptive",
+        "status": "completed",
+        "created_at": 1,
+        "updated_at": 2,
+        "trace_base": str(trace_base),
+    }
+    (run_dir / "run.json").write_text(json.dumps(record), encoding="utf-8")
+
+    detail = manager.detail(run_id)
+
+    assert len(detail["events"]) == 100
+    assert detail["event_counts"]["decision"] == 115
+    assert detail["metrics"]["actions"] == 115

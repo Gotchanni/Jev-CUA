@@ -194,8 +194,10 @@ class RunManager:
             if log_path is not None and log_path.is_file()
             else ""
         )
-        record["events"] = self._events(record)
-        record["metrics"] = self._metrics(record)
+        all_events = self._events(record, limit=None)
+        record["events"] = all_events[-100:]
+        record["event_counts"] = dict(Counter(event["kind"] for event in all_events))
+        record["metrics"] = self._metrics({**record, "events": all_events})
         return record
 
     def import_baseline(self, spec: dict[str, Any]) -> dict[str, Any]:
@@ -306,7 +308,9 @@ class RunManager:
             )
         return {"task": task, "rows": rows}
 
-    def _events(self, record: dict[str, Any]) -> list[dict[str, Any]]:
+    def _events(
+        self, record: dict[str, Any], *, limit: int | None = 100
+    ) -> list[dict[str, Any]]:
         if record.get("execution_profile") == "external":
             return []
         base = Path(record["trace_base"])
@@ -323,7 +327,8 @@ class RunManager:
                     continue
                 item["suite"] = name
                 events.append(item)
-        return sorted(events, key=lambda item: item.get("timestamp", 0))[-100:]
+        ordered = sorted(events, key=lambda item: item.get("timestamp", 0))
+        return ordered if limit is None else ordered[-limit:]
 
     def _metrics(self, record: dict[str, Any]) -> dict[str, Any]:
         if record.get("external_metrics"):
