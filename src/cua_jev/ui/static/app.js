@@ -31,8 +31,12 @@ function taskCard(id, task) {
   </button>`;
 }
 
-function currentMode() { return document.querySelector('input[name="mode"]:checked')?.value || "demo"; }
-function taskRoutes(task) { return currentMode() === "demo" ? task.demo_routes : task.evaluation_routes; }
+function currentMode() { return document.querySelector('input[name="mode"]:checked')?.value || "adaptive"; }
+function taskRoutes(task) {
+  const mode = currentMode();
+  if (mode === "adaptive") return task.adaptive_routes;
+  return mode === "physical" ? task.demo_routes : task.evaluation_routes;
+}
 
 function renderTasks() {
   $("#task-grid").innerHTML = Object.entries(tasks).map(([id, task]) => taskCard(id, task)).join("");
@@ -44,22 +48,26 @@ function renderTasks() {
 
 function updateConfig() {
   const task = tasks[selectedTask];
-  const demo = currentMode() === "demo";
+  const mode = currentMode();
+  const demo = mode !== "evaluation";
   $("#selected-routes").innerHTML = task ? taskRoutes(task).map((route) => `<span>${escapeHTML(route)}</span>`).join("") : "";
   $("#route-title").textContent = demo ? "本任务执行链" : "候选执行路线";
-  $("#profile-note").innerHTML = demo
-    ? "<b>PHYSICAL GUI</b><span>Jev 决定下一步；PyAutoGUI 真实移动鼠标、点击和输入。结构化接口只负责观察与验收。</span>"
-    : "<b>HYBRID ROUTING</b><span>同一子目标开放 GUI、CLI、MCP、API 或脚本候选，用于比较 Jev 的跨通道路由。</span>";
+  $("#profile-note").innerHTML = mode === "adaptive"
+    ? "<b>ADAPTIVE ROUTING</b><span>真实应用保持可见；Jev 同时选择下一子目标和 PyAutoGUI、DOM、COM、CLI、MCP 或 API 路线。</span>"
+    : mode === "physical"
+      ? "<b>PHYSICAL GUI</b><span>录屏优先：Jev 决定下一步，所有执行都由 PyAutoGUI 在真实应用中清晰呈现。</span>"
+      : "<b>ROUTE EVALUATION</b><span>确定性任务开放多种动作空间，并支持 Jev 与 Rule baseline 的可复现对照。</span>";
   $("#visible-desktop").disabled = demo;
   if (demo) $("#visible-desktop").checked = true;
-  $("#visible-hint").textContent = demo ? "Physical Demo 必须可见运行" : "可选：让支持的桌面通道保持可见";
+  $("#visible-hint").textContent = demo ? `${mode === "adaptive" ? "Adaptive" : "Physical"} Demo 必须可见运行` : "可选：让支持的桌面通道保持可见";
 }
 
 function eventLabel(event, run) {
   const payload = event.payload || {};
   if (event.kind === "observation") return ["Observation", payload.subgoal || payload.task || "状态已读取"];
   if (event.kind === "candidates") return ["Candidates", `${(payload.items || []).length} 条合法路线`];
-  if (event.kind === "decision") return [run?.policy === "rule" ? "Rule Decision" : "Jev Decision", payload.candidate_id || "动作已选择"];
+  if (event.kind === "decision") return [payload.model?.includes("rule-fallback") ? "Fallback Decision" : run?.policy === "rule" ? "Rule Decision" : "Jev Decision", payload.candidate_id || "动作已选择"];
+  if (event.kind === "policy_exchange" && payload.fallback) return ["Policy Fallback", `Jev 暂时不可达 · ${payload.fallback.candidate_id}`];
   if (event.kind === "commitment") return ["Commitment", `${payload.intent || "act"} · ${payload.channel || "channel"}`];
   if (event.kind === "guard") return ["Guard", payload.approved ? "安全检查通过" : `拒绝：${payload.reason || "unknown"}`];
   if (event.kind === "receipt") return ["Executor", `${payload.channel || "channel"} · ${payload.success ? "执行成功" : "执行失败"}`];
@@ -69,8 +77,18 @@ function eventLabel(event, run) {
   return [event.kind, "事件已记录"];
 }
 
+function friendlyReason(reason) {
+  const value = String(reason || "");
+  if (value.includes("temporarily unreachable") || value.includes("ConnectError")) {
+    return "Jev 服务暂时不可达；没有执行桌面动作。请直接重新运行。";
+  }
+  if (value.includes("timed out")) return "Jev 请求超时；没有执行桌面动作。请直接重新运行。";
+  if (value.includes("authentication failed")) return "Jev API 鉴权失败，请检查服务进程中的 API Key。";
+  return value;
+}
+
 function renderTimeline(events, run) {
-  const visible = events.filter((event) => !["candidates", "policy_exchange"].includes(event.kind)).slice(-18);
+  const visible = events.filter((event) => event.kind !== "candidates" && (event.kind !== "policy_exchange" || event.payload?.fallback)).slice(-18);
   $("#live-empty").hidden = visible.length > 0;
   $("#event-count").textContent = `${events.length} events`;
   $("#timeline").innerHTML = visible.map((event, index) => {
@@ -120,7 +138,7 @@ function renderEvidence(run) {
   $("#verification-board").innerHTML = verification.length ? verification.map((event) => {
     const passed = event.kind === "episode" ? event.payload.status === "success" : event.kind === "guard" ? event.payload.approved : event.payload.passed;
     const title = event.kind === "episode" ? `Episode · ${event.payload.status}` : event.kind === "guard" ? `Guard · ${event.payload.approved ? "approved" : "rejected"}` : event.payload.verifier;
-    const detail = event.kind === "episode" ? event.payload.reason : event.kind === "guard" ? JSON.stringify(event.payload.checks || event.payload.reason || {}) : JSON.stringify(event.payload.details || {});
+    const detail = event.kind === "episode" ? friendlyReason(event.payload.reason) : event.kind === "guard" ? JSON.stringify(event.payload.checks || event.payload.reason || {}) : JSON.stringify(event.payload.details || {});
     return `<div class="verification-item ${passed ? "" : "failed"}"><b>${escapeHTML(title)}</b><span>${escapeHTML(detail)}</span></div>`;
   }).join("") : '<p class="muted">独立验证结果会出现在这里。</p>';
   const summary = run?.summary;
@@ -140,8 +158,9 @@ function channelSummary(run) {
 function renderHistory() {
   $("#history-body").innerHTML = runs.length ? runs.slice(0, 12).map((run) => {
     const success = run.summary?.all_passed;
-    return `<tr data-run-id="${escapeHTML(run.id)}"><td><button class="history-link" data-open-run="${escapeHTML(run.id)}">${escapeHTML(run.id.slice(0, 15))}</button></td><td>${escapeHTML(tasks[run.task]?.title || run.task)}</td><td>${escapeHTML(run.policy)}</td><td><span class="status ${escapeHTML(run.status)}">${escapeHTML(run.status)}</span></td><td>${escapeHTML(channelSummary(run))}</td><td>${run.status === "completed" ? (success ? "通过" : "未通过") : "—"}</td></tr>`;
-  }).join("") : '<tr><td colspan="6" class="muted">还没有本机实验记录。</td></tr>';
+    const profile = run.execution_profile === "adaptive" ? "Adaptive" : run.execution_profile === "visible" ? "Physical" : "Evaluation";
+    return `<tr data-run-id="${escapeHTML(run.id)}"><td><button class="history-link" data-open-run="${escapeHTML(run.id)}">${escapeHTML(run.id.slice(0, 15))}</button></td><td>${escapeHTML(tasks[run.task]?.title || run.task)}</td><td>${profile}</td><td>${escapeHTML(run.policy)}</td><td><span class="status ${escapeHTML(run.status)}">${escapeHTML(run.status)}</span></td><td>${escapeHTML(channelSummary(run))}</td><td>${run.status === "completed" ? (success ? "通过" : "未通过") : "—"}</td></tr>`;
+  }).join("") : '<tr><td colspan="7" class="muted">还没有本机实验记录。</td></tr>';
   document.querySelectorAll("[data-open-run]").forEach((button) => {
     button.onclick = async () => { viewKind = "replay"; renderRun(await api(`/api/runs/${button.dataset.openRun}`)); location.hash = "evidence"; };
   });
@@ -154,6 +173,8 @@ function renderRun(run) {
   $("#header-status").textContent = run ? `${viewKind === "replay" ? "REPLAY" : "LIVE"} · ${run.policy.toUpperCase()} · ${run.status}` : "Ready";
   $("#trace-kind").textContent = run ? `03 / ${viewKind === "replay" ? "HISTORY REPLAY" : "LIVE EXECUTION"}` : "03 / WAITING";
   $("#run-button").disabled = running;
+  const failedEpisode = run?.events?.findLast?.((event) => event.kind === "episode")?.payload?.status;
+  $("#run-button span").textContent = failedEpisode === "policy_error" ? "重新运行" : "启动实验";
   $("#stop-button").hidden = !running;
   renderTimeline(run?.events || [], run);
   renderEvidence(run);
@@ -162,7 +183,7 @@ function renderRun(run) {
 async function startRun() {
   $("#action-error").textContent = "";
   const mode = currentMode();
-  const policy = mode === "demo" ? "jev" : document.querySelector('input[name="policy"]:checked').value;
+  const policy = mode !== "evaluation" ? "jev" : document.querySelector('input[name="policy"]:checked').value;
   try {
     viewKind = "live";
     renderRun(null);
@@ -170,7 +191,7 @@ async function startRun() {
       task: selectedTask,
       policy,
       visible_desktop: $("#visible-desktop").checked,
-      execution_profile: mode === "demo" ? "visible" : "hybrid"
+      execution_profile: mode === "adaptive" ? "adaptive" : mode === "physical" ? "visible" : "hybrid"
     });
     renderRun(run);
     await refreshRuns();

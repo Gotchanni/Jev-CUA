@@ -17,6 +17,7 @@ TASK_CATALOG = {
         "title": "Edge 公开站点购物",
         "description": "打开 SauceDemo，登录、排序、加入购物车并核验真实页面状态。",
         "demo_routes": ["PyAutoGUI · Edge", "DOM Observe", "DOM Verify"],
+        "adaptive_routes": ["PyAutoGUI · Edge", "Playwright DOM", "DOM Verify"],
         "evaluation_routes": ["Visible Edge", "DOM Script", "Page API"],
         "steps": 8,
     },
@@ -24,6 +25,7 @@ TASK_CATALOG = {
         "title": "Excel 销售汇总",
         "description": "完成总计、均值、复核状态和图表，再由独立 COM 会话验证。",
         "demo_routes": ["PyAutoGUI · Excel", "COM Observe", "COM Verify"],
+        "adaptive_routes": ["PyAutoGUI · Excel", "Live Excel COM", "COM Verify"],
         "evaluation_routes": ["Visible Excel", "Excel COM", "Workbook API"],
         "steps": 5,
     },
@@ -31,6 +33,7 @@ TASK_CATALOG = {
         "title": "VS Code 测试修复",
         "description": "诊断两个独立缺陷，选择修复顺序和通道，并在每次修改后重跑测试。",
         "demo_routes": ["PyAutoGUI · VS Code", "Terminal", "Test Verify"],
+        "adaptive_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "evaluation_routes": ["Visible VS Code", "MCP", "Filesystem API", "Allowlisted CLI"],
         "steps": 7,
     },
@@ -38,6 +41,7 @@ TASK_CATALOG = {
         "title": "文件整理",
         "description": "从混合收件箱中选择两份合格报告、归档并生成清单。",
         "demo_routes": ["PyAutoGUI · Explorer", "PyAutoGUI · Notepad", "File Verify"],
+        "adaptive_routes": ["PyAutoGUI", "MCP", "Filesystem API", "Allowlisted CLI"],
         "evaluation_routes": ["Visible Explorer", "MCP", "Filesystem API", "Allowlisted CLI"],
         "steps": 4,
     },
@@ -100,9 +104,11 @@ class RunManager:
             ]
             visible_desktop = bool(spec.get("visible_desktop"))
             execution_profile = str(spec.get("execution_profile", "hybrid"))
-            if execution_profile not in {"hybrid", "visible"}:
+            if execution_profile not in {"hybrid", "visible", "adaptive"}:
                 raise ValueError("无效的执行配置")
             argv.extend(("--profile", execution_profile))
+            if policy == "jev" and execution_profile in {"visible", "adaptive"}:
+                argv.append("--policy-fallback")
             if visible_desktop:
                 argv.append("--headed-edge")
                 argv.append("--open-vscode")

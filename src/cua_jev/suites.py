@@ -37,11 +37,13 @@ class EdgeProductTask:
         *,
         headless: bool = True,
         demo_mode: bool = False,
+        adaptive_mode: bool = False,
     ) -> None:
         self.workspace = Path(workspace).resolve()
         self.download = self.workspace / "products.csv"
         self.headless = headless
         self.demo_mode = demo_mode
+        self.adaptive_mode = adaptive_mode
         self.screen = ScreenController()
         self._playwright: Any = None
         self._browser: Any = None
@@ -323,7 +325,7 @@ class EdgeProductTask:
     def _live_edge_candidates(self, observation: Observation) -> tuple[ActionCandidate, ...]:
         state = observation.state
         if "saucedemo.com" not in state["url"]:
-            return (
+            return self._live_routes(
                 ActionCandidate(
                     "gui_navigate_store",
                     Channel.GUI,
@@ -332,10 +334,18 @@ class EdgeProductTask:
                     {"url": "https://www.saucedemo.com/"},
                     intent="open_public_store",
                 ),
+                ActionCandidate(
+                    "dom_navigate_store",
+                    Channel.SCRIPT,
+                    "edge.page_navigate",
+                    "Navigate the public store through the browser page API.",
+                    {"url": "https://www.saucedemo.com/"},
+                    intent="open_public_store",
+                ),
             )
         if not state["logged_in"]:
             if state["username"] != "standard_user":
-                return (
+                return self._live_routes(
                     ActionCandidate(
                         "gui_enter_username",
                         Channel.GUI,
@@ -345,9 +355,18 @@ class EdgeProductTask:
                         Risk.LOCAL_WRITE,
                         intent="enter_username",
                     ),
+                    ActionCandidate(
+                        "dom_enter_username",
+                        Channel.SCRIPT,
+                        "edge.fill",
+                        "Fill the username through the live DOM route.",
+                        {"selector": "#user-name", "text": "standard_user"},
+                        Risk.LOCAL_WRITE,
+                        intent="enter_username",
+                    ),
                 )
             if not state["password_entered"]:
-                return (
+                return self._live_routes(
                     ActionCandidate(
                         "gui_enter_password",
                         Channel.GUI,
@@ -357,13 +376,31 @@ class EdgeProductTask:
                         Risk.LOCAL_WRITE,
                         intent="enter_password",
                     ),
+                    ActionCandidate(
+                        "dom_enter_password",
+                        Channel.SCRIPT,
+                        "edge.fill",
+                        "Fill the password through the live DOM route.",
+                        {"selector": "#password", "text": "secret_sauce"},
+                        Risk.LOCAL_WRITE,
+                        intent="enter_password",
+                    ),
                 )
-            return (
+            return self._live_routes(
                 ActionCandidate(
                     "gui_sign_in",
                     Channel.GUI,
                     "edge.click",
                     "Click the visible sign-in button with the physical mouse.",
+                    {"selector": "#login-button"},
+                    Risk.LOCAL_WRITE,
+                    intent="sign_in",
+                ),
+                ActionCandidate(
+                    "dom_sign_in",
+                    Channel.SCRIPT,
+                    "edge.click",
+                    "Activate sign-in through the live DOM route.",
                     {"selector": "#login-button"},
                     Risk.LOCAL_WRITE,
                     intent="sign_in",
@@ -380,7 +417,7 @@ class EdgeProductTask:
                 ),
             )
         if state["sort"] != "lohi":
-            return (
+            return self._live_routes(
                 ActionCandidate(
                     "gui_sort_low_to_high",
                     Channel.GUI,
@@ -390,9 +427,18 @@ class EdgeProductTask:
                     Risk.LOCAL_WRITE,
                     intent="sort_products",
                 ),
+                ActionCandidate(
+                    "dom_sort_low_to_high",
+                    Channel.SCRIPT,
+                    "edge.dom_select",
+                    "Select low-to-high sorting through the live DOM route.",
+                    {"selector": ".product_sort_container", "value": "lohi"},
+                    Risk.LOCAL_WRITE,
+                    intent="sort_products",
+                ),
             )
         if state["cart_count"] != "1":
-            return (
+            return self._live_routes(
                 ActionCandidate(
                     "gui_add_backpack",
                     Channel.GUI,
@@ -402,9 +448,18 @@ class EdgeProductTask:
                     Risk.LOCAL_WRITE,
                     intent="add_product",
                 ),
+                ActionCandidate(
+                    "dom_add_backpack",
+                    Channel.SCRIPT,
+                    "edge.click",
+                    "Add Sauce Labs Backpack through the live DOM route.",
+                    {"selector": "#add-to-cart-sauce-labs-backpack"},
+                    Risk.LOCAL_WRITE,
+                    intent="add_product",
+                ),
             )
         if not state["cart_open"]:
-            return (
+            return self._live_routes(
                 ActionCandidate(
                     "gui_open_cart",
                     Channel.GUI,
@@ -414,8 +469,20 @@ class EdgeProductTask:
                     Risk.READ_ONLY,
                     intent="review_cart",
                 ),
+                ActionCandidate(
+                    "dom_open_cart",
+                    Channel.SCRIPT,
+                    "edge.click",
+                    "Open the cart through the live DOM route.",
+                    {"selector": ".shopping_cart_link"},
+                    Risk.READ_ONLY,
+                    intent="review_cart",
+                ),
             )
         raise RuntimeError("live Edge state has no legal continuation")
+
+    def _live_routes(self, gui: ActionCandidate, structured: ActionCandidate) -> tuple[ActionCandidate, ...]:
+        return (gui, structured) if self.adaptive_mode else (gui,)
 
     def _profile_routes(self, candidates: Sequence[ActionCandidate]) -> tuple[ActionCandidate, ...]:
         if not self.demo_mode:
@@ -502,7 +569,9 @@ class EdgeProductTask:
             if self.demo_mode and candidate.channel == Channel.GUI:
                 return self._screen_action(candidate)
             selector = candidate.arguments.get("selector")
-            if candidate.capability == "edge.fill":
+            if candidate.capability == "edge.page_navigate":
+                self._page.goto(candidate.arguments["url"], wait_until="domcontentloaded")
+            elif candidate.capability == "edge.fill":
                 self._page.locator(selector).fill(candidate.arguments["text"])
             elif candidate.capability == "edge.dom_set_value":
                 self._page.locator(selector).evaluate(
@@ -522,6 +591,8 @@ class EdgeProductTask:
                 self._page.locator(selector).click()
             elif candidate.capability == "edge.dom_dispatch_click":
                 self._page.locator(selector).dispatch_event("click")
+            elif candidate.capability == "edge.dom_select":
+                self._page.locator(selector).select_option(candidate.arguments["value"])
             elif candidate.capability == "edge.download":
                 with self._page.expect_download() as pending:
                     self._page.locator(selector).click()
@@ -575,11 +646,13 @@ class ExcelSalesTask:
         *,
         visible: bool = False,
         demo_mode: bool = False,
+        adaptive_mode: bool = False,
     ) -> None:
         self.workspace = Path(workspace).resolve()
         self.workbook = self.workspace / "sales.xlsx"
         self.visible = visible
         self.demo_mode = demo_mode
+        self.adaptive_mode = adaptive_mode
         self.screen = ScreenController()
         self._demo_pythoncom: Any = None
         self._demo_excel: Any = None
@@ -591,7 +664,9 @@ class ExcelSalesTask:
 
     def executor_bindings(self) -> dict[Channel, object]:
         bindings = {
-            Channel.SCRIPT: ExcelComExecutor(visible=False),
+            Channel.SCRIPT: self
+            if self.demo_mode and self.adaptive_mode
+            else ExcelComExecutor(visible=False),
             Channel.API: OpenPyxlExecutor(),
             Channel.CONTROL: ControlExecutor(),
         }
@@ -864,8 +939,12 @@ class ExcelSalesTask:
                 )
             )
         if pending:
-            if self.demo_mode:
+            if self.demo_mode and not self.adaptive_mode:
                 return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)
+            if self.adaptive_mode:
+                return tuple(
+                    candidate for candidate in pending if candidate.channel in {Channel.GUI, Channel.SCRIPT}
+                )
             return tuple(pending)
         return (
             ActionCandidate(
@@ -881,6 +960,29 @@ class ExcelSalesTask:
         def operation() -> dict[str, Any]:
             if not self.demo_mode or self._demo_book is None:
                 raise RuntimeError("persistent Excel demo session is unavailable")
+            if candidate.channel == Channel.SCRIPT:
+                if candidate.capability == "excel.write_range":
+                    cell = self._demo_book.Worksheets(candidate.arguments["sheet"]).Range(
+                        candidate.arguments["range"]
+                    )
+                    if "formula" in candidate.arguments:
+                        cell.Formula = candidate.arguments["formula"]
+                    else:
+                        cell.Value = candidate.arguments["value"]
+                elif candidate.capability == "excel.create_chart":
+                    sheet = self._demo_book.Worksheets(candidate.arguments["sheet"])
+                    chart_object = sheet.ChartObjects().Add(360, 40, 420, 240)
+                    chart_object.Chart.SetSourceData(sheet.Range(candidate.arguments["range"]))
+                    chart_object.Chart.HasTitle = True
+                    chart_object.Chart.ChartTitle.Text = candidate.arguments["title"]
+                else:
+                    raise ValueError(f"unsupported Excel COM capability: {candidate.capability}")
+                self._demo_book.Save()
+                return {
+                    "backend": "excel-com-live",
+                    "workbook": str(self.workbook),
+                    "capability": candidate.capability,
+                }
             self.screen.focus_handle(self._demo_excel.Hwnd)
             if candidate.capability == "excel.write_range":
                 address = f"{candidate.arguments['sheet']}!{candidate.arguments['range']}"
@@ -951,12 +1053,14 @@ class VSCodeTerminalTask:
         *,
         open_vscode: bool = False,
         demo_mode: bool = False,
+        adaptive_mode: bool = False,
     ) -> None:
         self.workspace = Path(workspace).resolve()
         self.source = self.workspace / "calc.py"
         self.test_file = self.workspace / "test_calc.py"
         self.open_vscode = open_vscode
         self.demo_mode = demo_mode
+        self.adaptive_mode = adaptive_mode
         self.screen = ScreenController()
         self.opened = False
         self.last_test: dict[str, Any] | None = None
@@ -1104,7 +1208,7 @@ class VSCodeTerminalTask:
             )
         if observation.state["test_returncode"] is None:
             if self.demo_mode:
-                return (
+                candidates = (
                     ActionCandidate(
                         "gui_run_tests",
                         Channel.GUI,
@@ -1113,7 +1217,16 @@ class VSCodeTerminalTask:
                         {"cwd": str(self.workspace)},
                         intent="diagnose" if not history else "validate_repairs",
                     ),
+                    ActionCandidate(
+                        "script_run_tests",
+                        Channel.SCRIPT,
+                        "tests.run",
+                        "Run the unit tests through the allowlisted process executor.",
+                        {"cwd": str(self.workspace)},
+                        intent="diagnose" if not history else "validate_repairs",
+                    ),
                 )
+                return candidates if self.adaptive_mode else candidates[:1]
             return (
                 ActionCandidate(
                     "run_tests",
@@ -1203,7 +1316,7 @@ class VSCodeTerminalTask:
                     "    return left * right",
                     6,
                 )
-            if self.demo_mode:
+            if self.demo_mode and not self.adaptive_mode:
                 return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)
             return tuple(pending)
         return (
@@ -1291,13 +1404,34 @@ def make_suite(
     profile: str = "hybrid",
 ):
     root = Path(workspace).resolve() / name
-    demo_mode = profile == "visible"
+    demo_mode = profile in {"visible", "adaptive"}
+    adaptive_mode = profile == "adaptive"
     if name == "edge":
-        return EdgeProductTask(root, headless=not headed_edge, demo_mode=demo_mode)
+        return EdgeProductTask(
+            root,
+            headless=not headed_edge,
+            demo_mode=demo_mode,
+            adaptive_mode=adaptive_mode,
+        )
     if name == "excel":
-        return ExcelSalesTask(root, visible=visible_apps, demo_mode=demo_mode)
+        return ExcelSalesTask(
+            root,
+            visible=visible_apps,
+            demo_mode=demo_mode,
+            adaptive_mode=adaptive_mode,
+        )
     if name == "vscode":
-        return VSCodeTerminalTask(root, open_vscode=open_vscode, demo_mode=demo_mode)
+        return VSCodeTerminalTask(
+            root,
+            open_vscode=open_vscode,
+            demo_mode=demo_mode,
+            adaptive_mode=adaptive_mode,
+        )
     if name == "explorer":
-        return FileOrganizationTask(root, visible=visible_apps, demo_mode=demo_mode)
+        return FileOrganizationTask(
+            root,
+            visible=visible_apps,
+            demo_mode=demo_mode,
+            adaptive_mode=adaptive_mode,
+        )
     raise ValueError(f"unknown suite: {name}")

@@ -57,7 +57,12 @@ def _parser() -> argparse.ArgumentParser:
     suite.add_argument("--headed-edge", action="store_true")
     suite.add_argument("--open-vscode", action="store_true")
     suite.add_argument("--visible-apps", action="store_true")
-    suite.add_argument("--profile", choices=("hybrid", "visible"), default="hybrid")
+    suite.add_argument("--profile", choices=("hybrid", "visible", "adaptive"), default="hybrid")
+    suite.add_argument(
+        "--policy-fallback",
+        action="store_true",
+        help="fall back to the deterministic rule policy after transient Jev transport failures",
+    )
     return parser
 
 
@@ -78,12 +83,16 @@ def _episode_runner(policy_name: str, workspace: Path, trace: Path) -> EpisodeRu
     return EpisodeRunner(runtime_factory, EpisodeConfig(max_steps=5))
 
 
-def _suite_runner(policy_name: str, trace: Path) -> EpisodeRunner:
+def _suite_runner(policy_name: str, trace: Path, *, policy_fallback: bool = False) -> EpisodeRunner:
     def runtime_factory(environment) -> AgentRuntime:
         executors = ExecutorRegistry()
         for channel, executor in environment.executor_bindings().items():
             executors.register(channel, executor)
-        policy = JevPolicy() if policy_name == "jev" else RulePolicy()
+        policy = (
+            JevPolicy(retries=2, fallback_on_transport=policy_fallback)
+            if policy_name == "jev"
+            else RulePolicy()
+        )
         return AgentRuntime(
             policy=policy,
             guard=ActionGuard(allowed_roots=environment.allowed_roots, allow_writes=True),
@@ -155,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         all_passed = True
         for name in names:
             trace = trace_base.with_name(f"{trace_base.stem}-{name}{trace_base.suffix}")
-            runner = _suite_runner(args.policy, trace)
+            runner = _suite_runner(args.policy, trace, policy_fallback=args.policy_fallback)
             result = ExperimentRunner(runner).run(
                 lambda suite_name=name: make_suite(
                     suite_name,

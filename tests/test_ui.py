@@ -13,6 +13,7 @@ def test_console_bootstrap_and_local_security(tmp_path: Path) -> None:
         bootstrap = client.get("/api/bootstrap").json()
         assert set(bootstrap["tasks"]) == {"edge", "excel", "vscode", "explorer"}
         assert "PyAutoGUI · Edge" in bootstrap["tasks"]["edge"]["demo_routes"]
+        assert "Playwright DOM" in bootstrap["tasks"]["edge"]["adaptive_routes"]
         assert "DOM Script" in bootstrap["tasks"]["edge"]["evaluation_routes"]
         assert client.post("/api/runs", json={"task": "bad", "policy": "rule"}).status_code == 403
         response = client.post(

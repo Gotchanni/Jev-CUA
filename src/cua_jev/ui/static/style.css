@@ -87,6 +87,7 @@ main { grid-column: 2; min-width: 0; max-width: 1540px; width: 100%; margin: 0 a
 
 .run-panel { grid-column: 2; grid-row: 1; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 0 0 16px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-muted); }
+.segmented.three-way { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .segmented legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
 .segmented span { min-height: 38px; display: grid; place-items: center; border-radius: 7px; color: var(--muted); font-size: 14px; transition: background-color 180ms ease, color 180ms ease; }

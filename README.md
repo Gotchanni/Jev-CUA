@@ -83,11 +83,15 @@ $env:TYPESAFE_API_KEY = "your-key"  # omit when using the Rule baseline
 cua-jev-ui
 ```
 
-Open `http://127.0.0.1:8768`. **Physical Demo** is the recordable presentation mode: it always uses the live
-Jev policy, never silently replays a prior run, and requires real visible Edge, Excel, VS Code, Explorer and
-Notepad windows. PyAutoGUI performs their input. **Route Evaluation** exposes the GUI/CLI/MCP/script/API
-alternatives and makes both Jev and the deterministic Rule baseline available for controlled comparisons.
-Historical runs are labelled `REPLAY` and load only when selected explicitly.
+Open `http://127.0.0.1:8768`. **Adaptive Demo** is the default system demonstration: real applications stay
+visible while Jev chooses both the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API
+route. **Physical Demo** is the recordable GUI-only ablation: every mutation is performed visibly through
+PyAutoGUI. **Route Evaluation** uses deterministic fixtures and makes both Jev and the Rule baseline
+available for controlled comparisons. Historical runs are labelled `REPLAY` and load only when selected.
+
+Demo profiles use a bounded, explicitly traced Rule fallback when a transient Jev transport outage persists
+after retries. The timeline labels this `Policy Fallback`; strict evaluation runs fail instead of falling back,
+so API reliability measurements are not hidden.
 
 The console shows the complete closed loop: structured observation, the currently legal intent-and-route
 candidates, Jev probabilities, commitment, Guard approval, executor receipt and independent verification.
@@ -137,6 +141,14 @@ cua-jev suite --task edge --policy rule --profile visible --headed-edge
 cua-jev suite --task excel --policy rule --profile visible --visible-apps
 cua-jev suite --task vscode --policy rule --profile visible --open-vscode
 cua-jev suite --task explorer --policy rule --profile visible --visible-apps
+```
+
+Use `--profile adaptive` for the visible multi-action-space system. Add `--policy-fallback` when a demo
+should finish through a transparently traced Rule fallback during transient Jev network outages:
+
+```powershell
+cua-jev suite --task all --policy jev --profile adaptive --policy-fallback `
+  --headed-edge --open-vscode --visible-apps
 ```
 
 The Edge physical demo deliberately targets the public `https://www.saucedemo.com/` site. The bundled HTML
@@ -241,7 +253,7 @@ milestones are:
 
 1. replace the in-process demo MCP tools with configurable remote MCP servers;
 2. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
-3. add action fallback/recovery policies, cross-route retry and richer DOM/UIA/Excel predicates;
+3. add cross-route executor retry and richer DOM/UIA/Excel predicates;
 4. grow from four workflows into parameterized task families with held-out instances;
 5. add an optional VLM fallback only for observations that DOM/UIA/COM cannot resolve.
 

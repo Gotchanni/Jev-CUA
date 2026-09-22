@@ -56,12 +56,14 @@ class FileOrganizationTask:
         *,
         visible: bool = False,
         demo_mode: bool = False,
+        adaptive_mode: bool = False,
     ) -> None:
         self.workspace = Path(workspace).resolve()
         self.inbox = self.workspace / "inbox"
         self.archive = self.workspace / "archive"
         self.visible = visible
         self.demo_mode = demo_mode
+        self.adaptive_mode = adaptive_mode
         self.screen = ScreenController()
         self._explorer_handle: int | None = None
         self.sources = {
@@ -245,7 +247,7 @@ class FileOrganizationTask:
                     )
                 )
         if pending:
-            if self.demo_mode:
+            if self.demo_mode and not self.adaptive_mode:
                 return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)
             return tuple(pending)
         manifest_text = "sales-Q3.txt\ninventory-Q3.txt\n"
@@ -298,9 +300,9 @@ class FileOrganizationTask:
                     intent="write_manifest",
                 ),
             )
-            if self.demo_mode:
+            if self.demo_mode and not self.adaptive_mode:
                 return (candidates[0],)
-            return candidates[1:]
+            return candidates if self.adaptive_mode else candidates[1:]
         return (
             ActionCandidate(
                 "done",

@@ -106,3 +106,35 @@ def test_visible_profile_keeps_parallel_excel_intents_but_only_gui(tmp_path: Pat
         "mark_reviewed",
         "visualize_revenue",
     }
+
+
+def test_adaptive_edge_offers_physical_and_dom_routes(tmp_path: Path) -> None:
+    task = EdgeProductTask(tmp_path, demo_mode=True, adaptive_mode=True)
+    observation = Observation(
+        "task",
+        "login",
+        {
+            "url": "https://www.saucedemo.com/",
+            "logged_in": False,
+            "username": "",
+            "password_entered": False,
+            "sort": "",
+            "cart_count": "0",
+            "cart_open": False,
+        },
+    )
+
+    candidates = task.candidates(observation, ())
+    assert channels(candidates) == {Channel.GUI, Channel.SCRIPT}
+    assert {candidate.intent for candidate in candidates} == {"enter_username"}
+
+
+def test_adaptive_excel_offers_physical_and_live_com_routes(tmp_path: Path) -> None:
+    task = ExcelSalesTask(tmp_path, visible=True, demo_mode=True, adaptive_mode=True)
+    observation = Observation(
+        "task",
+        "edit",
+        {"summary_value": None, "average_value": None, "review_status": None, "chart_count": 0},
+    )
+
+    assert channels(task.candidates(observation, ())) == {Channel.GUI, Channel.SCRIPT}
