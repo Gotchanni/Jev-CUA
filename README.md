@@ -6,6 +6,29 @@ CUA-JEV tests a narrow hypothesis: once a task and the current computer state ha
 small set of legal actions, can Jev select the next action faster and more cheaply than a general-purpose
 agent while preserving safety and task success?
 
+## Project position
+
+CUA-JEV is an **open reference architecture and evaluation harness for hybrid Windows computer-use action
+routing**. It is useful when an application task can expose structured state and several safe, typed ways to
+reach the same subgoal—for example PyAutoGUI, DOM, COM, CLI, MCP or a filesystem API—and the developer wants
+to measure whether Jev is a useful low-latency router between them.
+
+The reusable output is not the four example workflows by themselves. The project provides:
+
+- a common candidate, guard, executor, receipt and verifier contract across heterogeneous Windows channels;
+- an action-space ablation (`Hybrid Action Space` versus `GUI Only`) that is independent of the decision
+  policy;
+- complete JSONL decision evidence and an interactive trace explorer;
+- a benchmark contract for Jev, deterministic policies and external agents such as Codex Computer Use;
+- four executable capability-pack examples showing how to add a new application and independent terminal
+  verifier.
+
+The current release is a reference implementation, not evidence that Jev is already faster or more reliable
+for general computer use. Four frozen workflows demonstrate feasibility. A publishable efficiency claim
+requires parameterized task families, repeated held-out trials, a successful GUI-only ablation and measured
+general-agent baselines under the same terminal verifiers. Until those results exist, treat the console as an
+experiment workbench and the capability interfaces as the main open-source contribution.
+
 The first prototype deliberately uses **no VLM**. It combines structured observations from Edge DOM,
 Windows UI Automation, Excel COM, VS Code/terminal text, filesystem APIs and MCP-shaped tools. In the
 GUI-only profile, PyAutoGUI emits the real mouse and keyboard input while those structured interfaces

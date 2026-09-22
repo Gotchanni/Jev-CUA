@@ -171,7 +171,7 @@ function renderDonut(channels) {
 
 function renderRunMetrics(run) {
   const metrics = run.metrics || {};
-  $("#run-metrics").innerHTML = `<span><b>${formatMs(metrics.wall_time_ms)}</b><small>WALL TIME</small></span><span><b>${formatMs(metrics.decision_time_ms)}</b><small>DECISION</small></span><span><b>${formatMs(metrics.execution_time_ms)}</b><small>EXECUTION</small></span><span><b>${metrics.actions ?? "—"}</b><small>ACTIONS</small></span><span><b>${formatPct(metrics.gui_ratio)}</b><small>GUI SHARE</small></span>`;
+  $("#run-metrics").innerHTML = `<span><b>${formatMs(metrics.wall_time_ms)}</b><small>END-TO-END</small></span><span><b>${formatMs(metrics.decision_time_ms)}</b><small>DECISION</small></span><span><b>${formatMs(metrics.execution_time_ms)}</b><small>EXECUTION</small></span><span><b>${metrics.actions ?? "—"}</b><small>ACTIONS</small></span><span><b>${formatPct(metrics.gui_ratio)}</b><small>GUI SHARE</small></span>`;
 }
 
 function renderTrace(run) {
