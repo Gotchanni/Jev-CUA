@@ -7,9 +7,11 @@ small set of legal actions, can Jev select the next action faster and more cheap
 agent while preserving safety and task success?
 
 The first prototype deliberately uses **no VLM**. It combines structured observations from Edge DOM,
-Windows UI Automation, Excel COM, VS Code/terminal text, filesystem APIs and MCP-shaped tools. Jev does
-not generate shell commands or scripts. It chooses one complete, typed action candidate; a deterministic
-guard validates it, a channel executor runs it, and an independent verifier checks the result.
+Windows UI Automation, Excel COM, VS Code/terminal text, filesystem APIs and MCP-shaped tools. In the
+recordable demo profile, PyAutoGUI emits the real mouse and keyboard input while those structured interfaces
+only observe, locate and verify state. Jev does not generate shell commands or scripts. It chooses one
+complete, typed action candidate; a deterministic guard validates it, a channel executor runs it, and an
+independent verifier checks the result.
 
 ```text
 predefined task + structured observation
@@ -49,8 +51,9 @@ Initial capability adapters:
 
 | Capability pack | Structured interface | first-release operations |
 |---|---|---|
-| Edge | Playwright over an isolated Edge session | GUI-style DOM actions, injected DOM events, resource extraction |
-| Windows UI | UI Automation through pywinauto | top-level snapshot, invoke, set text, hotkey |
+| Physical screen GUI | PyAutoGUI with UIA/DOM-assisted location | mouse movement, click, hotkey, typing, clipboard-safe text entry |
+| Edge | Playwright observation over an isolated Edge session | public-site state snapshot, DOM location, independent predicates |
+| Windows UI | UI Automation through pywinauto | top-level snapshot and semantic control location |
 | Excel | COM through pywin32 plus direct workbook APIs | workbook snapshot, formula write, chart creation, independent COM verification |
 | VS Code/Terminal | official `code` CLI, filesystem API, MCP and allowlisted argv templates | open/goto, test, exact-source repair |
 | Filesystem/MCP | typed API, in-process tools and official MCP stdio transport | list, stat, read, copy, write, allowlisted tool call |
@@ -80,10 +83,11 @@ $env:TYPESAFE_API_KEY = "your-key"  # omit when using the Rule baseline
 cua-jev-ui
 ```
 
-Open `http://127.0.0.1:8768`. **Jev Demo** is the honest presentation mode: it always uses the live Jev
-policy, does not silently replay a prior run, and can expose the real Edge, Excel, VS Code and Explorer
-windows while the task executes. **Evaluation** makes Jev and the deterministic Rule baseline available for
-controlled comparisons. Historical runs are labelled `REPLAY` and load only when selected explicitly.
+Open `http://127.0.0.1:8768`. **Physical Demo** is the recordable presentation mode: it always uses the live
+Jev policy, never silently replays a prior run, and requires real visible Edge, Excel, VS Code, Explorer and
+Notepad windows. PyAutoGUI performs their input. **Route Evaluation** exposes the GUI/CLI/MCP/script/API
+alternatives and makes both Jev and the deterministic Rule baseline available for controlled comparisons.
+Historical runs are labelled `REPLAY` and load only when selected explicitly.
 
 The console shows the complete closed loop: structured observation, the currently legal intent-and-route
 candidates, Jev probabilities, commitment, Guard approval, executor receipt and independent verification.
@@ -114,19 +118,30 @@ The complete suite command runs four multi-step, independently verified workflow
 
 | Workflow | Required state transitions | Competing real routes |
 |---|---|---|
-| Edge procurement | set category, set budget, require stock, search, review, export | visible DOM GUI, injected DOM script, page resource API |
-| Excel sales review | compute total, compute average, mark reviewed, create chart | visible Excel COM, background COM script, direct workbook API |
-| VS Code diagnosis | run failing tests, repair either independent defect, rerun, repair the other, prove green | visible editor UIA, MCP, filesystem API, allowlisted CLI |
-| Explorer publishing | distinguish final Q3 files from draft/prior-quarter distractors, archive both, write exact manifest | visible Explorer UIA, MCP, filesystem API, allowlisted CLI |
+| Edge public shopping | navigate to SauceDemo, sign in, sort low-to-high, add the requested product, open cart | physical Edge input in demo; DOM/script/API routes in evaluation |
+| Excel sales review | compute total, compute average, mark reviewed, create chart | physical Excel input in demo; COM and workbook API in evaluation |
+| VS Code diagnosis | run failing tests, repair either independent defect, rerun, repair the other, prove green | physical editor/terminal input in demo; MCP, filesystem API and CLI in evaluation |
+| Explorer publishing | distinguish final Q3 files from draft/prior-quarter distractors, archive both, write exact manifest | physical Explorer/Notepad input in demo; MCP, filesystem API and CLI in evaluation |
 
 These are not four fixed action scripts. At each state, the task builder offers every currently legal
 **intent × execution route** pair. For example, the initial Excel state can expose twelve candidates across
 four pending subgoals and three backends; after one action, the remaining candidate set is rebuilt from the
 new workbook state. Jev therefore chooses both *what to do next* and *how to do it*.
 
-Use `--headed-edge`, `--open-vscode` and `--visible-apps` for a recordable run in which all four desktop GUI
-routes are available. Every task is reset before each episode, and summary JSON plus per-task JSONL traces
-are written under `runs/` by default.
+Use `--profile visible` for a recordable physical-GUI run. `--headed-edge`, `--open-vscode` and
+`--visible-apps` are added by the web console; when invoking the CLI directly, pass them explicitly. Every
+task is reset before each episode, and summary JSON plus per-task JSONL traces are written under `runs/`.
+
+```powershell
+cua-jev suite --task edge --policy rule --profile visible --headed-edge
+cua-jev suite --task excel --policy rule --profile visible --visible-apps
+cua-jev suite --task vscode --policy rule --profile visible --open-vscode
+cua-jev suite --task explorer --policy rule --profile visible --visible-apps
+```
+
+The Edge physical demo deliberately targets the public `https://www.saucedemo.com/` site. The bundled HTML
+page remains only as a deterministic regression fixture for the hybrid evaluation profile; it is not used
+by the public demo.
 
 To run the same candidates through real Jev:
 
@@ -134,7 +149,7 @@ To run the same candidates through real Jev:
 $env:TYPESAFE_API_KEY = "your-key"
 cua-jev demo --policy jev
 cua-jev suite --task all --policy jev
-cua-jev suite --task all --policy jev --headed-edge --open-vscode --visible-apps
+cua-jev suite --task all --policy jev --profile visible --headed-edge --open-vscode --visible-apps
 ```
 
 Validate only the API decision path, or repeat the frozen task for reliability measurements:

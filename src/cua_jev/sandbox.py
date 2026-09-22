@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import re
 import shutil
+import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -12,7 +15,9 @@ from .executors import (
     FileSystemExecutor,
     InProcessMcpExecutor,
     RegisteredCliExecutor,
+    ScreenController,
 )
+from .executors.common import execute_with_receipt
 from .models import ActionCandidate, ActionReceipt, Channel, Observation, Risk, Verification
 from .runtime import StepResult
 
@@ -45,11 +50,20 @@ class FileOrganizationTask:
 
     name = "explorer-organize-fixture"
 
-    def __init__(self, workspace: str | Path, *, visible: bool = False) -> None:
+    def __init__(
+        self,
+        workspace: str | Path,
+        *,
+        visible: bool = False,
+        demo_mode: bool = False,
+    ) -> None:
         self.workspace = Path(workspace).resolve()
         self.inbox = self.workspace / "inbox"
         self.archive = self.workspace / "archive"
         self.visible = visible
+        self.demo_mode = demo_mode
+        self.screen = ScreenController()
+        self._explorer_handle: int | None = None
         self.sources = {
             "sales": self.inbox / "sales-Q3.txt",
             "inventory": self.inbox / "inventory-Q3.txt",
@@ -71,6 +85,40 @@ class FileOrganizationTask:
         for path in (*self.destinations.values(), self.manifest):
             if path.exists():
                 path.unlink()
+        if self.demo_mode:
+            # An empty manifest is part of the visible demo fixture. Opening a
+            # known file avoids inheriting an unrelated tab from an existing
+            # Windows 11 Notepad session.
+            self.manifest.touch()
+            try:
+                from pywinauto import Desktop
+            except ImportError:
+                raise RuntimeError("pywinauto is required for Explorer demo mode") from None
+            desktop = Desktop(backend="uia")
+            before = {window.handle for window in desktop.windows(title_re=r".*inbox.*")}
+            subprocess.Popen(
+                ["explorer.exe", "/n,", str(self.inbox)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            deadline = time.time() + 15
+            matches = []
+            while time.time() < deadline:
+                matches = [
+                    window for window in desktop.windows(title_re=r".*inbox.*") if window.handle not in before
+                ]
+                if matches:
+                    break
+                time.sleep(0.25)
+            if not matches:
+                matches = desktop.windows(title_re=r".*inbox.*")
+            if not matches:
+                raise RuntimeError("Explorer window did not become available")
+            self._explorer_handle = matches[-1].handle
+            self.screen.focus_handle(self._explorer_handle)
+            self.screen.hotkey("ctrl", "l")
+            self.screen.paste_text(str(self.inbox))
+            self.screen.press("enter")
 
     @property
     def allowed_roots(self) -> tuple[Path, ...]:
@@ -107,7 +155,7 @@ class FileOrganizationTask:
             Channel.CONTROL: ControlExecutor(),
         }
         if self.visible:
-            bindings[Channel.GUI] = ExplorerUiaExecutor()
+            bindings[Channel.GUI] = self if self.demo_mode else ExplorerUiaExecutor()
         return bindings
 
     def observe(self, history: Sequence[StepResult]) -> Observation:
@@ -197,12 +245,25 @@ class FileOrganizationTask:
                     )
                 )
         if pending:
+            if self.demo_mode:
+                return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)
             return tuple(pending)
         manifest_text = "sales-Q3.txt\ninventory-Q3.txt\n"
         if observation.state["manifest_text"] != manifest_text:
             args = {"path": str(self.manifest), "text": manifest_text}
             expected = {"path": str(self.manifest), "contains": "inventory-Q3.txt"}
-            return (
+            candidates = (
+                ActionCandidate(
+                    "gui_write_manifest",
+                    Channel.GUI,
+                    "notepad.screen_write_text",
+                    "Create the archive manifest visibly in Notepad.",
+                    args,
+                    Risk.LOCAL_WRITE,
+                    verifier="file.contains",
+                    expected=expected,
+                    intent="write_manifest",
+                ),
                 ActionCandidate(
                     "mcp_write_manifest",
                     Channel.MCP,
@@ -237,6 +298,9 @@ class FileOrganizationTask:
                     intent="write_manifest",
                 ),
             )
+            if self.demo_mode:
+                return (candidates[0],)
+            return candidates[1:]
         return (
             ActionCandidate(
                 "done",
@@ -246,6 +310,64 @@ class FileOrganizationTask:
                 intent="finish",
             ),
         )
+
+    def __call__(self, candidate: ActionCandidate, observation_id: str, decision_id: str) -> ActionReceipt:
+        def operation() -> dict:
+            if candidate.capability == "explorer.uia_copy":
+                source = Path(candidate.arguments["source_path"])
+                destination = Path(candidate.arguments["destination_path"])
+                window = self.screen.focus_handle(self._explorer_handle)
+                self.screen.hotkey("ctrl", "l")
+                self.screen.paste_text(str(source.parent))
+                self.screen.press("enter")
+                time.sleep(1)
+                rectangle = window.rectangle()
+                row = sorted(self.inbox.iterdir()).index(source)
+                self.screen.click_point(
+                    rectangle.left + rectangle.width() * 0.12,
+                    rectangle.top + rectangle.height() * 0.128,
+                )
+                self.screen.press("home")
+                for _ in range(row):
+                    self.screen.press("down")
+                self.screen.hotkey("ctrl", "c")
+                self.screen.hotkey("ctrl", "l")
+                # Keep the CF_HDROP payload placed on the clipboard by Ctrl+C.
+                # paste_text() would replace it with plain text before Ctrl+V.
+                self.screen.write(str(destination.parent), interval=0.002)
+                self.screen.press("enter")
+                time.sleep(1)
+                self.screen.click_point(
+                    rectangle.left + rectangle.width() * 0.5,
+                    rectangle.top + rectangle.height() * 0.3,
+                )
+                self.screen.hotkey("ctrl", "v")
+                deadline = time.time() + 10
+                while time.time() < deadline and not destination.exists():
+                    time.sleep(0.2)
+                if not destination.exists():
+                    raise RuntimeError("physical Explorer copy did not create the destination")
+                return {"backend": "pyautogui", "window": window.window_text()}
+            if candidate.capability == "notepad.screen_write_text":
+                path = Path(candidate.arguments["path"])
+                subprocess.Popen(
+                    ["notepad.exe", str(path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                self.screen.focus(rf".*{re.escape(path.name)}.*", maximize=False)
+                self.screen.hotkey("ctrl", "a")
+                self.screen.paste_text(candidate.arguments["text"])
+                self.screen.hotkey("ctrl", "s")
+                deadline = time.time() + 10
+                while time.time() < deadline and not path.exists():
+                    time.sleep(0.2)
+                if not path.exists():
+                    raise RuntimeError("physical Notepad save did not create the manifest")
+                return {"backend": "pyautogui", "path": str(path)}
+            raise ValueError(f"unsupported screen capability: {candidate.capability}")
+
+        return execute_with_receipt(candidate, observation_id, decision_id, operation)
 
     def evaluate(
         self,

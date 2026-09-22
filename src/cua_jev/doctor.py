@@ -19,6 +19,7 @@ def doctor() -> dict[str, Any]:
             "filesystem": True,
             "cli": True,
             "windows_uia": importlib.util.find_spec("pywinauto") is not None,
+            "screen_gui": importlib.util.find_spec("pyautogui") is not None,
             "excel_com": importlib.util.find_spec("win32com") is not None,
             "edge_dom": importlib.util.find_spec("playwright") is not None,
             "vscode": bool(shutil.which("code") or shutil.which("code.cmd")),

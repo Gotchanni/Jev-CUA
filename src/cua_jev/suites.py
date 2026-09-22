@@ -4,6 +4,7 @@ import gc
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from .executors import (
     FileSystemExecutor,
     OpenPyxlExecutor,
     RegisteredCliExecutor,
+    ScreenController,
     VSCodeExecutor,
 )
 from .executors.common import execute_with_receipt
@@ -29,10 +31,18 @@ class EdgeProductTask:
 
     name = "edge-product-filter"
 
-    def __init__(self, workspace: str | Path, *, headless: bool = True) -> None:
+    def __init__(
+        self,
+        workspace: str | Path,
+        *,
+        headless: bool = True,
+        demo_mode: bool = False,
+    ) -> None:
         self.workspace = Path(workspace).resolve()
         self.download = self.workspace / "products.csv"
         self.headless = headless
+        self.demo_mode = demo_mode
+        self.screen = ScreenController()
         self._playwright: Any = None
         self._browser: Any = None
         self._page: Any = None
@@ -58,16 +68,29 @@ class EdgeProductTask:
             from playwright.sync_api import sync_playwright
         except ImportError:
             raise CapabilityUnavailable("install cua-jev[browser] to run the Edge suite") from None
-        fixture = Path(__file__).with_name("fixtures") / "product_filter.html"
         self._playwright = sync_playwright().start()
         try:
-            self._browser = self._playwright.chromium.launch(channel="msedge", headless=self.headless)
+            self._browser = self._playwright.chromium.launch(
+                channel="msedge",
+                headless=self.headless,
+                args=["--window-position=80,60", "--window-size=1280,900"],
+            )
         except Exception:
             self.close()
             raise
-        context = self._browser.new_context(accept_downloads=True)
+        context = self._browser.new_context(
+            accept_downloads=True,
+            no_viewport=True if self.demo_mode else None,
+        )
         self._page = context.new_page()
-        self._page.goto(fixture.as_uri(), wait_until="domcontentloaded")
+        if self.demo_mode:
+            self._page.goto("about:blank")
+            self._page.evaluate("document.title = 'CUA-JEV Live Edge Session'")
+            self._page.bring_to_front()
+            time.sleep(1)
+        else:
+            fixture = Path(__file__).with_name("fixtures") / "product_filter.html"
+            self._page.goto(fixture.as_uri(), wait_until="domcontentloaded")
 
     def close(self) -> None:
         if self._browser is not None:
@@ -79,6 +102,8 @@ class EdgeProductTask:
     def observe(self, history: Sequence[StepResult]) -> Observation:
         if self._page is None:
             raise RuntimeError("Edge task has not been reset")
+        if self.demo_mode:
+            return self._observe_live_edge()
         return Observation(
             task="Find in-stock laptops under 1200, review the result set, and export a verified CSV.",
             subgoal="Verify completion" if self.download.exists() else "Advance the browser workflow",
@@ -98,9 +123,47 @@ class EdgeProductTask:
             source=self.name,
         )
 
+    def _observe_live_edge(self) -> Observation:
+        url = self._page.url
+
+        def value(selector: str) -> str:
+            locator = self._page.locator(selector)
+            return locator.input_value() if locator.count() else ""
+
+        logged_in = any(path in url for path in ("/inventory.html", "/cart.html"))
+        in_cart = (
+            self._page.locator(".inventory_item_name").filter(has_text="Sauce Labs Backpack").count() > 0
+            and "/cart.html" in url
+        )
+        return Observation(
+            task=(
+                "Use the public SauceDemo store in Edge: sign in, sort products by price, "
+                "add the backpack, and verify it in the cart."
+            ),
+            subgoal="Verify cart" if in_cart else "Advance the live browser workflow",
+            state={
+                "url": url,
+                "public_site": "saucedemo.com",
+                "username": value("#user-name"),
+                "password_entered": bool(value("#password")),
+                "logged_in": logged_in,
+                "sort": value(".product_sort_container") if logged_in else "",
+                "cart_count": (
+                    self._page.locator(".shopping_cart_badge").text_content()
+                    if self._page.locator(".shopping_cart_badge").count()
+                    else "0"
+                ),
+                "cart_open": "/cart.html" in url,
+                "backpack_in_cart": in_cart,
+            },
+            source=self.name,
+        )
+
     def candidates(
         self, observation: Observation, history: Sequence[StepResult]
     ) -> Sequence[ActionCandidate]:
+        if self.demo_mode:
+            return self._live_edge_candidates(observation)
         state = observation.state
         pending: list[ActionCandidate] = []
         if state["query"] != "laptop":
@@ -173,73 +236,79 @@ class EdgeProductTask:
                 )
             )
         if pending:
-            return tuple(pending)
+            return self._profile_routes(pending)
         if state["status"] not in {"review", "complete"}:
-            return (
-                ActionCandidate(
-                    "gui_apply_filter",
-                    Channel.GUI,
-                    "edge.click",
-                    "Click Filter through the visible Playwright pointer action.",
-                    {"selector": "#filter"},
-                    Risk.LOCAL_WRITE,
-                    intent="search_catalog",
-                ),
-                ActionCandidate(
-                    "script_apply_filter",
-                    Channel.SCRIPT,
-                    "edge.dom_dispatch_click",
-                    "Dispatch the filter button click directly through the DOM.",
-                    {"selector": "#filter"},
-                    Risk.LOCAL_WRITE,
-                    intent="search_catalog",
-                ),
+            return self._profile_routes(
+                (
+                    ActionCandidate(
+                        "gui_apply_filter",
+                        Channel.GUI,
+                        "edge.click",
+                        "Click Filter through the visible Playwright pointer action.",
+                        {"selector": "#filter"},
+                        Risk.LOCAL_WRITE,
+                        intent="search_catalog",
+                    ),
+                    ActionCandidate(
+                        "script_apply_filter",
+                        Channel.SCRIPT,
+                        "edge.dom_dispatch_click",
+                        "Dispatch the filter button click directly through the DOM.",
+                        {"selector": "#filter"},
+                        Risk.LOCAL_WRITE,
+                        intent="search_catalog",
+                    ),
+                )
             )
         if state["status"] == "review":
-            return (
-                ActionCandidate(
-                    "gui_confirm_results",
-                    Channel.GUI,
-                    "edge.click",
-                    "Confirm the two visible matching products.",
-                    {"selector": "#confirm"},
-                    Risk.LOCAL_WRITE,
-                    intent="review_results",
-                ),
-                ActionCandidate(
-                    "script_confirm_results",
-                    Channel.SCRIPT,
-                    "edge.dom_dispatch_click",
-                    "Confirm the reviewed result set through a DOM event.",
-                    {"selector": "#confirm"},
-                    Risk.LOCAL_WRITE,
-                    intent="review_results",
-                ),
+            return self._profile_routes(
+                (
+                    ActionCandidate(
+                        "gui_confirm_results",
+                        Channel.GUI,
+                        "edge.click",
+                        "Confirm the two visible matching products.",
+                        {"selector": "#confirm"},
+                        Risk.LOCAL_WRITE,
+                        intent="review_results",
+                    ),
+                    ActionCandidate(
+                        "script_confirm_results",
+                        Channel.SCRIPT,
+                        "edge.dom_dispatch_click",
+                        "Confirm the reviewed result set through a DOM event.",
+                        {"selector": "#confirm"},
+                        Risk.LOCAL_WRITE,
+                        intent="review_results",
+                    ),
+                )
             )
         if not state["download_exists"]:
-            return (
-                ActionCandidate(
-                    "gui_download_csv",
-                    Channel.GUI,
-                    "edge.download",
-                    "Click the visible download link and save the browser download.",
-                    {"selector": "#download", "destination_path": str(self.download)},
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected={"path": str(self.download), "contains": "ThinkPad,laptop,999"},
-                    intent="export_results",
-                ),
-                ActionCandidate(
-                    "api_download_csv",
-                    Channel.API,
-                    "edge.extract_download",
-                    "Read the generated download resource through the page API and save it directly.",
-                    {"selector": "#download", "destination_path": str(self.download)},
-                    Risk.LOCAL_WRITE,
-                    verifier="file.contains",
-                    expected={"path": str(self.download), "contains": "ThinkPad,laptop,999"},
-                    intent="export_results",
-                ),
+            return self._profile_routes(
+                (
+                    ActionCandidate(
+                        "gui_download_csv",
+                        Channel.GUI,
+                        "edge.download",
+                        "Click the visible download link and save the browser download.",
+                        {"selector": "#download", "destination_path": str(self.download)},
+                        Risk.LOCAL_WRITE,
+                        verifier="file.contains",
+                        expected={"path": str(self.download), "contains": "ThinkPad,laptop,999"},
+                        intent="export_results",
+                    ),
+                    ActionCandidate(
+                        "api_download_csv",
+                        Channel.API,
+                        "edge.extract_download",
+                        "Read the generated download resource through the page API and save it directly.",
+                        {"selector": "#download", "destination_path": str(self.download)},
+                        Risk.LOCAL_WRITE,
+                        verifier="file.contains",
+                        expected={"path": str(self.download), "contains": "ThinkPad,laptop,999"},
+                        intent="export_results",
+                    ),
+                )
             )
         return (
             ActionCandidate(
@@ -251,10 +320,187 @@ class EdgeProductTask:
             ),
         )
 
+    def _live_edge_candidates(self, observation: Observation) -> tuple[ActionCandidate, ...]:
+        state = observation.state
+        if "saucedemo.com" not in state["url"]:
+            return (
+                ActionCandidate(
+                    "gui_navigate_store",
+                    Channel.GUI,
+                    "edge.navigate",
+                    "Navigate the visible Edge address bar to the public SauceDemo store.",
+                    {"url": "https://www.saucedemo.com/"},
+                    intent="open_public_store",
+                ),
+            )
+        if not state["logged_in"]:
+            if state["username"] != "standard_user":
+                return (
+                    ActionCandidate(
+                        "gui_enter_username",
+                        Channel.GUI,
+                        "edge.fill",
+                        "Enter the public SauceDemo standard user through physical keyboard input.",
+                        {"selector": "#user-name", "text": "standard_user"},
+                        Risk.LOCAL_WRITE,
+                        intent="enter_username",
+                    ),
+                )
+            if not state["password_entered"]:
+                return (
+                    ActionCandidate(
+                        "gui_enter_password",
+                        Channel.GUI,
+                        "edge.fill",
+                        "Enter the documented SauceDemo password through physical keyboard input.",
+                        {"selector": "#password", "text": "secret_sauce"},
+                        Risk.LOCAL_WRITE,
+                        intent="enter_password",
+                    ),
+                )
+            return (
+                ActionCandidate(
+                    "gui_sign_in",
+                    Channel.GUI,
+                    "edge.click",
+                    "Click the visible sign-in button with the physical mouse.",
+                    {"selector": "#login-button"},
+                    Risk.LOCAL_WRITE,
+                    intent="sign_in",
+                ),
+            )
+        if state["cart_open"]:
+            return (
+                ActionCandidate(
+                    "done",
+                    Channel.CONTROL,
+                    "control.done",
+                    "Declare completion after the live cart contains Sauce Labs Backpack.",
+                    intent="finish",
+                ),
+            )
+        if state["sort"] != "lohi":
+            return (
+                ActionCandidate(
+                    "gui_sort_low_to_high",
+                    Channel.GUI,
+                    "edge.select_low_to_high",
+                    "Sort the live product list from low to high with mouse and keyboard.",
+                    {"selector": ".product_sort_container"},
+                    Risk.LOCAL_WRITE,
+                    intent="sort_products",
+                ),
+            )
+        if state["cart_count"] != "1":
+            return (
+                ActionCandidate(
+                    "gui_add_backpack",
+                    Channel.GUI,
+                    "edge.click",
+                    "Add Sauce Labs Backpack to the cart with the physical mouse.",
+                    {"selector": "#add-to-cart-sauce-labs-backpack"},
+                    Risk.LOCAL_WRITE,
+                    intent="add_product",
+                ),
+            )
+        if not state["cart_open"]:
+            return (
+                ActionCandidate(
+                    "gui_open_cart",
+                    Channel.GUI,
+                    "edge.click",
+                    "Open the visible shopping cart with the physical mouse.",
+                    {"selector": ".shopping_cart_link"},
+                    Risk.READ_ONLY,
+                    intent="review_cart",
+                ),
+            )
+        raise RuntimeError("live Edge state has no legal continuation")
+
+    def _profile_routes(self, candidates: Sequence[ActionCandidate]) -> tuple[ActionCandidate, ...]:
+        if not self.demo_mode:
+            return tuple(candidates)
+        return tuple(candidate for candidate in candidates if candidate.channel == Channel.GUI)
+
+    def _screen_point(self, selector: str, window) -> tuple[float, float]:
+        if self._page is None:
+            raise RuntimeError("Edge page is unavailable")
+        point = self._page.locator(selector).evaluate(
+            """element => {
+              const rect = element.getBoundingClientRect();
+              return {
+                x: (window.outerWidth - window.innerWidth) / 2 + rect.left + rect.width / 2,
+                y: window.outerHeight - window.innerHeight + rect.top + rect.height / 2,
+                outerWidth: window.outerWidth,
+                outerHeight: window.outerHeight
+              };
+            }"""
+        )
+        rectangle = window.rectangle()
+        return (
+            rectangle.left + float(point["x"]) * rectangle.width() / float(point["outerWidth"]),
+            rectangle.top + float(point["y"]) * rectangle.height() / float(point["outerHeight"]),
+        )
+
+    def _screen_action(self, candidate: ActionCandidate) -> dict[str, Any]:
+        if self._page is None:
+            raise RuntimeError("Edge page is unavailable")
+        self._page.bring_to_front()
+        if candidate.capability == "edge.navigate":
+            self.screen.focus(r".*CUA-JEV Live Edge Session.*")
+            self.screen.hotkey("ctrl", "l")
+            self.screen.paste_text(candidate.arguments["url"])
+            self.screen.press("enter")
+            time.sleep(0.5)
+            if self._page.url == "about:blank":
+                self.screen.press("enter")
+            self._page.wait_for_url("**saucedemo.com/**", timeout=20_000)
+            return {"backend": "pyautogui", "url": self._page.url, "target": "address_bar"}
+        window = self.screen.focus(r".*Swag Labs.*")
+        selector = candidate.arguments["selector"]
+        locator = self._page.locator(selector)
+        if selector == "#add-to-cart-sauce-labs-backpack":
+            self.screen.hotkey("ctrl", "f")
+            self.screen.write("Sauce Labs Backpack")
+            self.screen.press("enter")
+            self.screen.press("esc")
+        rectangle = window.rectangle()
+        self.screen.move_point(rectangle.mid_point().x, rectangle.mid_point().y)
+        for _ in range(8):
+            box = locator.bounding_box()
+            viewport_height = self._page.evaluate("window.innerHeight")
+            if box and 0 <= box["y"] and box["y"] + box["height"] <= viewport_height:
+                break
+            self.screen.scroll(5 if box and box["y"] < 0 else -5)
+        x, y = self._screen_point(selector, window)
+        if candidate.capability == "edge.download":
+            with self._page.expect_download() as pending:
+                self.screen.click_point(x, y)
+            pending.value.save_as(candidate.arguments["destination_path"])
+        else:
+            self.screen.click_point(x, y)
+            if candidate.capability == "edge.fill":
+                self.screen.hotkey("ctrl", "a")
+                self.screen.write(candidate.arguments["text"])
+            elif candidate.capability == "edge.select_low_to_high":
+                self.screen.press("home")
+                self.screen.press("down")
+                self.screen.press("down")
+                self.screen.press("enter")
+        self._page.wait_for_timeout(500)
+        return {
+            "backend": "pyautogui",
+            "selector": selector,
+            "point": [round(x), round(y)],
+            "url": self._page.url,
+        }
+
     def __call__(self, candidate: ActionCandidate, observation_id: str, decision_id: str) -> ActionReceipt:
         def operation() -> dict[str, Any]:
             if self._page is None:
                 raise RuntimeError("Edge page is unavailable")
+            if self.demo_mode and candidate.channel == Channel.GUI:
+                return self._screen_action(candidate)
             selector = candidate.arguments.get("selector")
             if candidate.capability == "edge.fill":
                 self._page.locator(selector).fill(candidate.arguments["text"])
@@ -305,6 +551,14 @@ class EdgeProductTask:
             return Evaluation(False, False, "browser_action_not_verified")
         if candidate.capability != "control.done":
             return Evaluation(False, False, "browser_step_completed; reobserve")
+        if self.demo_mode:
+            state = self._observe_live_edge().state
+            valid = bool(state["backpack_in_cart"] and state["cart_open"])
+            return Evaluation(
+                valid,
+                True,
+                "live_edge_cart_verified" if valid else "live_edge_cart_invalid",
+            )
         payload = self.download.read_text("utf-8") if self.download.is_file() else ""
         valid = "ThinkPad,laptop,999,true" in payload and "Surface,laptop,1099,true" in payload
         return Evaluation(valid, True, "edge_export_verified" if valid else "edge_export_invalid")
@@ -315,10 +569,21 @@ class ExcelSalesTask:
 
     name = "excel-sales-summary"
 
-    def __init__(self, workspace: str | Path, *, visible: bool = False) -> None:
+    def __init__(
+        self,
+        workspace: str | Path,
+        *,
+        visible: bool = False,
+        demo_mode: bool = False,
+    ) -> None:
         self.workspace = Path(workspace).resolve()
         self.workbook = self.workspace / "sales.xlsx"
         self.visible = visible
+        self.demo_mode = demo_mode
+        self.screen = ScreenController()
+        self._demo_pythoncom: Any = None
+        self._demo_excel: Any = None
+        self._demo_book: Any = None
 
     @property
     def allowed_roots(self) -> tuple[Path, ...]:
@@ -331,7 +596,7 @@ class ExcelSalesTask:
             Channel.CONTROL: ControlExecutor(),
         }
         if self.visible:
-            bindings[Channel.GUI] = ExcelComExecutor(visible=True)
+            bindings[Channel.GUI] = self if self.demo_mode else ExcelComExecutor(visible=True)
         return bindings
 
     @staticmethod
@@ -384,8 +649,56 @@ class ExcelSalesTask:
             del excel
             gc.collect()
             pythoncom.CoUninitialize()
+        if self.demo_mode:
+            pythoncom.CoInitialize()
+            self._demo_pythoncom = pythoncom
+            self._demo_excel = win32.DispatchEx("Excel.Application")
+            self._demo_excel.Visible = True
+            self._demo_excel.DisplayAlerts = False
+            self._demo_book = self._demo_excel.Workbooks.Open(str(self.workbook))
+            self._demo_book.Worksheets("Summary").Activate()
+            self.screen.focus_handle(self._demo_excel.Hwnd)
+
+    def close(self) -> None:
+        if self._demo_book is not None:
+            try:
+                self._demo_book.Save()
+                self._demo_book.Close(SaveChanges=True)
+            except Exception:
+                pass
+            self._demo_book = None
+        if self._demo_excel is not None:
+            try:
+                self._demo_excel.Quit()
+            except Exception:
+                pass
+            self._demo_excel = None
+        if self._demo_pythoncom is not None:
+            self._demo_pythoncom.CoUninitialize()
+            self._demo_pythoncom = None
 
     def observe(self, history: Sequence[StepResult]) -> Observation:
+        if self.demo_mode and self._demo_book is not None:
+            deadline = time.time() + 10
+            while True:
+                try:
+                    summary = self._demo_book.Worksheets("Summary")
+                    self._demo_excel.Calculate()
+                    value = summary.Range("B2").Value
+                    formula = summary.Range("B2").Formula
+                    average = summary.Range("B3").Value
+                    average_formula = summary.Range("B3").Formula
+                    review_status = summary.Range("B4").Value
+                    charts = sum(
+                        self._demo_book.Worksheets(i).ChartObjects().Count
+                        for i in range(1, self._demo_book.Worksheets.Count + 1)
+                    )
+                    break
+                except Exception:
+                    if time.time() >= deadline:
+                        raise
+                    time.sleep(0.25)
+            return self._observation(value, formula, average, average_formula, review_status, charts)
         pythoncom, win32 = self._excel_modules()
         pythoncom.CoInitialize()
         excel = win32.DispatchEx("Excel.Application")
@@ -412,6 +725,17 @@ class ExcelSalesTask:
             del excel
             gc.collect()
             pythoncom.CoUninitialize()
+        return self._observation(value, formula, average, average_formula, review_status, charts)
+
+    def _observation(
+        self,
+        value,
+        formula,
+        average,
+        average_formula,
+        review_status,
+        charts,
+    ) -> Observation:
         return Observation(
             task="Calculate total sales revenue and create a product revenue chart.",
             subgoal="Verify workbook"
@@ -540,6 +864,8 @@ class ExcelSalesTask:
                 )
             )
         if pending:
+            if self.demo_mode:
+                return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)
             return tuple(pending)
         return (
             ActionCandidate(
@@ -550,6 +876,41 @@ class ExcelSalesTask:
                 intent="finish",
             ),
         )
+
+    def __call__(self, candidate: ActionCandidate, observation_id: str, decision_id: str) -> ActionReceipt:
+        def operation() -> dict[str, Any]:
+            if not self.demo_mode or self._demo_book is None:
+                raise RuntimeError("persistent Excel demo session is unavailable")
+            self.screen.focus_handle(self._demo_excel.Hwnd)
+            if candidate.capability == "excel.write_range":
+                address = f"{candidate.arguments['sheet']}!{candidate.arguments['range']}"
+                text = str(candidate.arguments.get("formula", candidate.arguments.get("value", "")))
+                self.screen.hotkey("ctrl", "g")
+                self.screen.paste_text(address)
+                self.screen.press("enter")
+                self.screen.paste_text(text)
+                self.screen.press("enter")
+            elif candidate.capability == "excel.create_chart":
+                address = f"{candidate.arguments['sheet']}!{candidate.arguments['range']}"
+                self.screen.hotkey("ctrl", "g")
+                self.screen.paste_text(address)
+                self.screen.press("enter")
+                self.screen.press("alt")
+                self.screen.press("n")
+                self.screen.press("r")
+                time.sleep(1)
+                self.screen.press("enter")
+            else:
+                raise ValueError(f"unsupported Excel screen capability: {candidate.capability}")
+            self.screen.hotkey("ctrl", "s")
+            time.sleep(1.5)
+            return {
+                "backend": "pyautogui",
+                "workbook": str(self.workbook),
+                "capability": candidate.capability,
+            }
+
+        return execute_with_receipt(candidate, observation_id, decision_id, operation)
 
     def evaluate(
         self,
@@ -584,13 +945,22 @@ class VSCodeTerminalTask:
         "def multiply(left, right):\n    return left * right\n"
     )
 
-    def __init__(self, workspace: str | Path, *, open_vscode: bool = False) -> None:
+    def __init__(
+        self,
+        workspace: str | Path,
+        *,
+        open_vscode: bool = False,
+        demo_mode: bool = False,
+    ) -> None:
         self.workspace = Path(workspace).resolve()
         self.source = self.workspace / "calc.py"
         self.test_file = self.workspace / "test_calc.py"
         self.open_vscode = open_vscode
+        self.demo_mode = demo_mode
+        self.screen = ScreenController()
         self.opened = False
         self.last_test: dict[str, Any] | None = None
+        self._vscode_handle: int | None = None
 
     @property
     def allowed_roots(self) -> tuple[Path, ...]:
@@ -618,7 +988,7 @@ class VSCodeTerminalTask:
             Channel.CONTROL: ControlExecutor(),
         }
         if self.open_vscode:
-            bindings[Channel.GUI] = VSCodeExecutor()
+            bindings[Channel.GUI] = self if self.demo_mode else VSCodeExecutor()
         return bindings
 
     def reset(self) -> None:
@@ -641,6 +1011,42 @@ class VSCodeTerminalTask:
         )
         self.opened = not self.open_vscode
         self.last_test = None
+        if self.demo_mode:
+            try:
+                from pywinauto import Desktop
+            except ImportError:
+                raise CapabilityUnavailable("install cua-jev[windows] for VS Code demo mode") from None
+            executable = shutil.which("code") or shutil.which("code.cmd")
+            if not executable:
+                raise CapabilityUnavailable("VS Code 'code' CLI is not on PATH")
+            desktop = Desktop(backend="uia")
+            before = {window.handle for window in desktop.windows(title_re=r".*Visual Studio Code.*")}
+            subprocess.run(
+                [executable, "--new-window", str(self.workspace)],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                shell=False,
+                check=False,
+            )
+            deadline = time.time() + 15
+            matches = []
+            while time.time() < deadline:
+                matches = [
+                    window
+                    for window in desktop.windows(title_re=r".*Visual Studio Code.*")
+                    if window.handle not in before
+                ]
+                if matches:
+                    break
+                time.sleep(0.25)
+            if not matches:
+                matches = desktop.windows(title_re=r".*Visual Studio Code.*")
+            if not matches:
+                raise RuntimeError("VS Code window did not become available")
+            self._vscode_handle = matches[-1].handle
+            self.screen.focus_handle(self._vscode_handle)
+            self.opened = True
 
     def _test(self) -> subprocess.CompletedProcess[str]:
         cache = self.workspace / "__pycache__"
@@ -673,8 +1079,8 @@ class VSCodeTerminalTask:
                 "workspace": str(self.workspace),
                 "source_path": str(self.source),
                 "source": source,
-                "add_fixed": "return left + right" in source,
-                "multiply_fixed": "return left * right" in source,
+                "add_fixed": "def add(left, right):\n    return left + right" in source,
+                "multiply_fixed": "def multiply(left, right):\n    return left * right" in source,
                 "vscode_opened": self.opened,
                 "test_returncode": test["returncode"],
                 "test_stdout": test["stdout"][-2000:],
@@ -697,6 +1103,17 @@ class VSCodeTerminalTask:
                 ),
             )
         if observation.state["test_returncode"] is None:
+            if self.demo_mode:
+                return (
+                    ActionCandidate(
+                        "gui_run_tests",
+                        Channel.GUI,
+                        "vscode.screen_run_tests",
+                        "Run the unit tests visibly in the VS Code integrated terminal.",
+                        {"cwd": str(self.workspace)},
+                        intent="diagnose" if not history else "validate_repairs",
+                    ),
+                )
             return (
                 ActionCandidate(
                     "run_tests",
@@ -715,7 +1132,7 @@ class VSCodeTerminalTask:
             ) -> None:
                 updated = observation.state["source"].replace(old, new)
                 common = {"path": str(self.source), "text": updated}
-                expected = {"path": str(self.source), "contains": replacement_line.strip()}
+                expected = {"path": str(self.source), "contains": new}
                 pending.extend(
                     (
                         ActionCandidate(
@@ -786,6 +1203,8 @@ class VSCodeTerminalTask:
                     "    return left * right",
                     6,
                 )
+            if self.demo_mode:
+                return tuple(candidate for candidate in pending if candidate.channel == Channel.GUI)
             return tuple(pending)
         return (
             ActionCandidate(
@@ -799,6 +1218,32 @@ class VSCodeTerminalTask:
 
     def __call__(self, candidate: ActionCandidate, observation_id: str, decision_id: str) -> ActionReceipt:
         def operation() -> dict[str, Any]:
+            if candidate.capability == "vscode.screen_run_tests":
+                self.screen.focus_handle(self._vscode_handle)
+                self.screen.hotkey("ctrl", "`")
+                self.screen.paste_text("python -B -m unittest discover -s . -q")
+                self.screen.press("enter")
+                time.sleep(2)
+                completed = self._test()
+                return {
+                    "backend": "pyautogui",
+                    "returncode": completed.returncode,
+                    "stdout": completed.stdout[-20_000:],
+                    "stderr": completed.stderr[-5_000:],
+                }
+            if candidate.capability == "vscode.uia_replace_line" and self.demo_mode:
+                self.screen.focus_handle(self._vscode_handle)
+                self.screen.hotkey("ctrl", "p")
+                self.screen.paste_text(f"calc.py:{int(candidate.arguments['line'])}")
+                self.screen.press("enter")
+                self.screen.hotkey("ctrl", "l")
+                self.screen.paste_text(f"{candidate.arguments['text']}\n")
+                self.screen.hotkey("ctrl", "s")
+                return {
+                    "backend": "pyautogui",
+                    "path": str(self.source),
+                    "line": int(candidate.arguments["line"]),
+                }
             if candidate.capability != "tests.run":
                 raise ValueError(f"unsupported task capability: {candidate.capability}")
             completed = self._test()
@@ -822,7 +1267,7 @@ class VSCodeTerminalTask:
         if candidate.capability == "vscode.open":
             self.opened = True
             return Evaluation(False, False, "project_opened; reobserve")
-        if candidate.capability == "tests.run":
+        if candidate.capability in {"tests.run", "vscode.screen_run_tests"}:
             self.last_test = dict(receipt.output)
             reason = "test_suite_passed" if receipt.output["returncode"] == 0 else "test_failures_captured"
             return Evaluation(False, False, reason, {"returncode": receipt.output["returncode"]})
@@ -843,14 +1288,16 @@ def make_suite(
     headed_edge: bool = False,
     open_vscode: bool = False,
     visible_apps: bool = False,
+    profile: str = "hybrid",
 ):
     root = Path(workspace).resolve() / name
+    demo_mode = profile == "visible"
     if name == "edge":
-        return EdgeProductTask(root, headless=not headed_edge)
+        return EdgeProductTask(root, headless=not headed_edge, demo_mode=demo_mode)
     if name == "excel":
-        return ExcelSalesTask(root, visible=visible_apps)
+        return ExcelSalesTask(root, visible=visible_apps, demo_mode=demo_mode)
     if name == "vscode":
-        return VSCodeTerminalTask(root, open_vscode=open_vscode)
+        return VSCodeTerminalTask(root, open_vscode=open_vscode, demo_mode=demo_mode)
     if name == "explorer":
-        return FileOrganizationTask(root, visible=visible_apps)
+        return FileOrganizationTask(root, visible=visible_apps, demo_mode=demo_mode)
     raise ValueError(f"unknown suite: {name}")

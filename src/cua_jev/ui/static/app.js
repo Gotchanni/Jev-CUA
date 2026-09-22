@@ -23,12 +23,16 @@ async function api(url, body, method) {
 }
 
 function taskCard(id, task) {
+  const routes = taskRoutes(task);
   return `<button class="task-card" role="radio" aria-checked="${id === selectedTask}" data-task="${id}">
     <span class="task-card-head"><b>${escapeHTML(task.title)}</b><span>${task.steps} STEPS</span></span>
     <p>${escapeHTML(task.description)}</p>
-    <span class="route-chips">${task.routes.map((route) => `<span>${escapeHTML(route)}</span>`).join("")}</span>
+    <span class="route-chips">${routes.map((route) => `<span>${escapeHTML(route)}</span>`).join("")}</span>
   </button>`;
 }
+
+function currentMode() { return document.querySelector('input[name="mode"]:checked')?.value || "demo"; }
+function taskRoutes(task) { return currentMode() === "demo" ? task.demo_routes : task.evaluation_routes; }
 
 function renderTasks() {
   $("#task-grid").innerHTML = Object.entries(tasks).map(([id, task]) => taskCard(id, task)).join("");
@@ -40,7 +44,15 @@ function renderTasks() {
 
 function updateConfig() {
   const task = tasks[selectedTask];
-  $("#selected-routes").innerHTML = task ? task.routes.map((route) => `<span>${escapeHTML(route)}</span>`).join("") : "";
+  const demo = currentMode() === "demo";
+  $("#selected-routes").innerHTML = task ? taskRoutes(task).map((route) => `<span>${escapeHTML(route)}</span>`).join("") : "";
+  $("#route-title").textContent = demo ? "本任务执行链" : "候选执行路线";
+  $("#profile-note").innerHTML = demo
+    ? "<b>PHYSICAL GUI</b><span>Jev 决定下一步；PyAutoGUI 真实移动鼠标、点击和输入。结构化接口只负责观察与验收。</span>"
+    : "<b>HYBRID ROUTING</b><span>同一子目标开放 GUI、CLI、MCP、API 或脚本候选，用于比较 Jev 的跨通道路由。</span>";
+  $("#visible-desktop").disabled = demo;
+  if (demo) $("#visible-desktop").checked = true;
+  $("#visible-hint").textContent = demo ? "Physical Demo 必须可见运行" : "可选：让支持的桌面通道保持可见";
 }
 
 function eventLabel(event, run) {
@@ -65,6 +77,16 @@ function renderTimeline(events, run) {
     const [title, detail] = eventLabel(event, run);
     return `<li class="${index === visible.length - 1 ? "current" : ""}"><span class="timeline-top"><span>${escapeHTML(event.suite || "run")}</span><span>${String(index + 1).padStart(2,"0")}</span></span><strong>${escapeHTML(title)}</strong><p>${escapeHTML(detail)}</p></li>`;
   }).join("");
+  const completed = new Set();
+  for (const event of events) {
+    if (event.kind === "observation") completed.add("Observe");
+    if (event.kind === "decision") completed.add("Decide");
+    if (event.kind === "receipt") completed.add("Act");
+    if (event.kind === "verification") completed.add("Verify");
+  }
+  $("#loop-progress").innerHTML = ["Observe", "Decide", "Act", "Verify"].map((stage, index) =>
+    `<span class="${completed.has(stage) ? "complete" : ""}"><i>${index + 1}</i>${stage}</span>`
+  ).join("");
 }
 
 function latestPair(events) {
@@ -139,12 +161,17 @@ function renderRun(run) {
 
 async function startRun() {
   $("#action-error").textContent = "";
-  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const mode = currentMode();
   const policy = mode === "demo" ? "jev" : document.querySelector('input[name="policy"]:checked').value;
   try {
     viewKind = "live";
     renderRun(null);
-    const run = await api("/api/runs", { task: selectedTask, policy, visible_desktop: $("#visible-desktop").checked });
+    const run = await api("/api/runs", {
+      task: selectedTask,
+      policy,
+      visible_desktop: $("#visible-desktop").checked,
+      execution_profile: mode === "demo" ? "visible" : "hybrid"
+    });
     renderRun(run);
     await refreshRuns();
   } catch (error) { $("#action-error").textContent = error.message; }
@@ -179,12 +206,16 @@ async function init() {
     $("#key-state").textContent = bootstrap.jev_configured ? "已配置" : "未配置";
     $("#runtime-dot").style.background = bootstrap.jev_configured ? "var(--green)" : "var(--amber)";
     renderTasks();
+    renderRun(null);
     await refreshRuns();
     if (bootstrap.active_id) { viewKind = "live"; renderRun(await api(`/api/runs/${bootstrap.active_id}`)); }
     $("#run-button").onclick = startRun;
     $("#stop-button").onclick = stopRun;
     document.querySelectorAll('input[name="mode"]').forEach((input) => {
-      input.onchange = () => { $("#evaluation-policy").hidden = input.value !== "evaluation" || !input.checked; };
+      input.onchange = () => {
+        $("#evaluation-policy").hidden = input.value !== "evaluation" || !input.checked;
+        renderTasks();
+      };
     });
     setInterval(poll, 900);
   } catch (error) { $("#action-error").textContent = error.message; }

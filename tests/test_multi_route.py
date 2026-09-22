@@ -67,3 +67,42 @@ def test_explorer_offers_three_copy_routes(tmp_path: Path) -> None:
     observation = task.observe(())
 
     assert channels(task.candidates(observation, ())) == {Channel.MCP, Channel.API, Channel.CLI}
+
+
+def test_visible_profile_exposes_only_physical_edge_actions(tmp_path: Path) -> None:
+    task = EdgeProductTask(tmp_path, demo_mode=True)
+    observation = Observation(
+        "task",
+        "navigate",
+        {
+            "url": "about:blank",
+            "logged_in": False,
+            "username": "",
+            "password_entered": False,
+            "sort": "",
+            "cart_count": "0",
+            "cart_open": False,
+        },
+    )
+
+    candidates = task.candidates(observation, ())
+    assert channels(candidates) == {Channel.GUI}
+    assert candidates[0].capability == "edge.navigate"
+
+
+def test_visible_profile_keeps_parallel_excel_intents_but_only_gui(tmp_path: Path) -> None:
+    task = ExcelSalesTask(tmp_path, visible=True, demo_mode=True)
+    observation = Observation(
+        "task",
+        "edit",
+        {"summary_value": None, "average_value": None, "review_status": None, "chart_count": 0},
+    )
+
+    candidates = task.candidates(observation, ())
+    assert channels(candidates) == {Channel.GUI}
+    assert {candidate.intent for candidate in candidates} == {
+        "calculate_total",
+        "calculate_average",
+        "mark_reviewed",
+        "visualize_revenue",
+    }

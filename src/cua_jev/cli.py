@@ -57,6 +57,7 @@ def _parser() -> argparse.ArgumentParser:
     suite.add_argument("--headed-edge", action="store_true")
     suite.add_argument("--open-vscode", action="store_true")
     suite.add_argument("--visible-apps", action="store_true")
+    suite.add_argument("--profile", choices=("hybrid", "visible"), default="hybrid")
     return parser
 
 
@@ -162,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
                     headed_edge=args.headed_edge,
                     open_vscode=args.open_vscode,
                     visible_apps=args.visible_apps,
+                    profile=args.profile,
                 ),
                 args.episodes,
             )
@@ -173,6 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = {
             "policy": args.policy,
             "requested_episodes": args.episodes,
+            "profile": args.profile,
             "all_passed": all_passed,
             "suites": summaries,
         }
