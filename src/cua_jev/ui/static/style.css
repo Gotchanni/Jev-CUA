@@ -55,25 +55,18 @@ main { overflow: hidden; }
 .hero-note { margin: 20px 0 0; color: var(--muted); font: 16px/1.55 var(--sans); }
 
 .decision-card { overflow: hidden; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--surface); box-shadow: 0 26px 70px rgba(40,70,90,.12); }
-.decision-card > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 26px 28px; border-bottom: 1px solid var(--line); background: var(--blue-pale); }
-.decision-card > header div { display: grid; gap: 4px; }
-.decision-card > header span { color: var(--accent); font: 800 13px/1.3 var(--sans); letter-spacing: .07em; }
-.decision-card > header strong { font-size: 21px; }
-.decision-card > header > b { padding: 9px 11px; border-radius: 7px; color: var(--green); background: var(--green-soft); font: 800 16px/1 var(--sans); }
-.decision-body { display: grid; gap: 20px; padding: 27px 28px; }
-.decision-context { display: grid; gap: 2px; }
-.decision-context span, .decision-output small { color: var(--subtle); font: 800 12px/1.3 var(--sans); letter-spacing: .08em; text-transform: uppercase; }
-.decision-context strong { font-size: 23px; }
-.action-space { display: grid; grid-template-columns: repeat(6,1fr); gap: 7px; }
-.action-space span { display: grid; min-height: 42px; place-items: center; border: 1px solid var(--line); border-radius: 7px; color: var(--navy); background: var(--blue-pale); font: 800 12px/1 var(--sans); }
-.decision-output { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 16px; padding: 18px; border: 1px solid #d39a7f; border-radius: 12px; background: #fbf0e9; }
-.jev-node { display: grid; width: 58px; height: 58px; place-items: center; border-radius: 50%; color: white; background: var(--navy); font: 800 15px/1 var(--sans); box-shadow: 0 0 0 7px rgba(30,71,109,.08); }
-.decision-arrow { color: var(--accent); font: 700 22px/1 var(--sans); }
-.decision-output > div { display: grid; gap: 3px; }
-.decision-output strong { color: var(--navy); font: 800 16px/1.3 var(--sans); }
-.decision-output p { margin: 0; color: var(--muted); font: 14px/1.45 var(--sans); }
-.decision-card > footer { display: flex; justify-content: center; gap: 13px; padding: 17px 28px; border-top: 1px solid var(--line); color: var(--green); background: var(--green-soft); font: 700 14px/1.3 var(--sans); }
-.decision-card > footer i { color: var(--accent); font-style: normal; }
+.decision-card > header { display: grid; gap: 8px; padding: 28px 30px; border-bottom: 1px solid var(--line); background: var(--blue-pale); }
+.decision-card > header span { color: var(--accent); font: 800 13px/1.3 var(--sans); letter-spacing: .08em; }
+.decision-card > header h2 { margin: 0; font-size: 27px; line-height: 1.2; letter-spacing: -.025em; }
+.decision-card > header p { margin: 0; color: var(--muted); font: 16px/1.45 var(--sans); }
+.decision-flow { margin: 0; padding: 8px 30px; list-style: none; }
+.decision-flow li { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: start; gap: 16px; padding: 19px 0; }
+.decision-flow li + li { border-top: 1px solid var(--line); }
+.flow-index { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 10px; color: var(--navy); background: var(--blue-soft); font: 800 14px/1 var(--sans); }
+.decision-flow li:nth-child(2) .flow-index { color: #84452b; background: var(--accent-soft); }
+.decision-flow h3 { margin: 0 0 3px; font-size: 20px; line-height: 1.25; }
+.decision-flow p { margin: 0; color: var(--muted); font: 15px/1.45 var(--sans); }
+.decision-card > footer { padding: 16px 30px; border-top: 1px solid var(--line); color: var(--green); background: var(--green-soft); font: 700 15px/1.4 var(--sans); }
 
 .proof-strip { display: grid; max-width: 1172px; grid-template-columns: repeat(4,1fr); margin: 0 auto; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .proof-strip div { display: grid; min-height: 122px; place-content: center; gap: 7px; padding: 22px; border-right: 1px solid var(--line); text-align: center; }
@@ -208,8 +201,8 @@ footer { display: flex; max-width: 1220px; justify-content: space-between; margi
   .hero { min-height: 0; padding: 68px 18px 58px; }
   .hero h1 { font-size: 48px; }
   .hero-lead { font-size: 18px; }
-  .decision-card > header, .decision-body { padding-right: 20px; padding-left: 20px; }
-  .decision-card > footer { flex-wrap: wrap; padding-right: 20px; padding-left: 20px; }
+  .decision-card > header, .decision-card > footer { padding-right: 20px; padding-left: 20px; }
+  .decision-flow { padding-right: 20px; padding-left: 20px; }
   .proof-strip { grid-template-columns: repeat(2,1fr); margin: 0 18px; }
   .proof-strip div:nth-child(2) { border-right: 0; }
   .proof-strip div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
@@ -236,10 +229,7 @@ footer { display: flex; max-width: 1220px; justify-content: space-between; margi
 }
 @media (max-width: 460px) {
   .hero-actions { align-items: stretch; flex-direction: column; }
-  .action-space { grid-template-columns: repeat(3,1fr); }
-  .decision-output { grid-template-columns: auto 1fr; }
-  .decision-arrow { display: none; }
-  .decision-card > footer { align-items: center; flex-direction: column; }
-  .decision-card > footer i { transform: rotate(90deg); }
+  .decision-card > header h2 { font-size: 24px; }
+  .decision-flow li { gap: 13px; }
   .proof-strip div { min-height: 104px; }
 }

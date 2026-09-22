@@ -76,6 +76,11 @@ def test_console_serves_brand_assets(tmp_path: Path) -> None:
         page = client.get("/")
         assert page.status_code == 200
         assert "CUA-JEV" in page.text
+        assert "How Jev powers computer use" in page.text
+        assert "CUA observes" in page.text
+        assert "Jev chooses" in page.text
+        assert "CUA acts &amp; checks" in page.text
+        assert "43 ms" not in page.text
         assert ">REAL LAB<" not in page.text
         assert "qiushi-eagle" not in page.text
         assert client.get("/static/logo-mark.svg").status_code == 200

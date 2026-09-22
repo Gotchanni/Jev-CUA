@@ -35,20 +35,27 @@
         <p class="hero-note">No task-specific router training. Typed candidates in, one executable action out.</p>
       </div>
 
-      <div class="decision-card" aria-label="Jev hybrid action selection example">
-        <header><div><span>ONE DECISION · HYBRID ACTION SPACE</span><strong>How Jev chooses the next action</strong></div><b>43 ms</b></header>
-        <div class="decision-body">
-          <div class="decision-context"><span>Current subgoal</span><strong>Repair the failing test</strong></div>
-          <div class="action-space" aria-label="Available action spaces">
-            <span>GUI</span><span>DOM</span><span>COM</span><span>CLI</span><span>MCP</span><span>API</span>
-          </div>
-          <div class="decision-output">
-            <span class="jev-node">Jev</span>
-            <span class="decision-arrow" aria-hidden="true">→</span>
-            <div><small>Selected action</small><strong>MCP · filesystem.write_text</strong><p>Typed, guarded, and independently verifiable.</p></div>
-          </div>
-        </div>
-        <footer><span>Typed candidates</span><i aria-hidden="true">→</i><span>One committed action</span><i aria-hidden="true">→</i><span>Verified result</span></footer>
+      <div class="decision-card" aria-label="How CUA and Jev work together">
+        <header>
+          <span>CUA × JEV</span>
+          <h2>How Jev powers computer use</h2>
+          <p>CUA handles the computer. Jev decides how to act.</p>
+        </header>
+        <ol class="decision-flow">
+          <li>
+            <span class="flow-index">01</span>
+            <div><h3>CUA observes</h3><p>Read the task and current app state. Offer actions that can be taken now.</p></div>
+          </li>
+          <li>
+            <span class="flow-index">02</span>
+            <div><h3>Jev chooses</h3><p>Pick one action across GUI, CLI, MCP, scripts, and app APIs.</p></div>
+          </li>
+          <li>
+            <span class="flow-index">03</span>
+            <div><h3>CUA acts &amp; checks</h3><p>Guard the choice, run the tool, and verify the new state.</p></div>
+          </li>
+        </ol>
+        <footer>Repeat with the new state until the task is done.</footer>
       </div>
     </section>
 
