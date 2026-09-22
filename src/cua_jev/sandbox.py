@@ -394,17 +394,24 @@ class FileOrganizationTask:
                 handle = None
                 while time.time() < deadline and handle is None:
                     windows = Desktop(backend="uia").windows(visible_only=True)
+                    notepad_windows = [
+                        window for window in windows if window.element_info.class_name == "Notepad"
+                    ]
                     process_windows = [
                         window
-                        for window in windows
+                        for window in notepad_windows
                         if window.element_info.process_id == process.pid
                     ]
                     title_windows = [
                         window
-                        for window in windows
+                        for window in notepad_windows
                         if re.search(re.escape(path.name), window.window_text(), re.IGNORECASE)
                     ]
-                    matches = process_windows or title_windows
+                    # Windows 11 Notepad can hand a new tab to an existing process. In
+                    # that case the launcher PID owns no window and the title can keep
+                    # showing the previously active tab. Bind the app window, then use
+                    # its visible Open dialog to select the exact file below.
+                    matches = process_windows or title_windows or notepad_windows
                     if matches:
                         handle = matches[-1].handle
                         break
@@ -412,6 +419,15 @@ class FileOrganizationTask:
                 if handle is None:
                     raise RuntimeError(f"visible Notepad window not found for {path.name}")
                 self.screen.focus_handle(handle, maximize=False)
+                deadline = time.time() + 5
+                while time.time() < deadline and not path.is_file():
+                    time.sleep(0.2)
+                if not path.is_file():
+                    raise RuntimeError(f"Notepad did not create {path.name}")
+                self.screen.hotkey("ctrl", "o")
+                self.screen.paste_text(str(path))
+                self.screen.press("enter")
+                time.sleep(1)
                 self.screen.hotkey("ctrl", "a")
                 self.screen.paste_text(candidate.arguments["text"])
                 self.screen.hotkey("ctrl", "s")
