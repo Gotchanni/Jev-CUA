@@ -31,11 +31,16 @@ predefined task + structured observation
 
 The shared runtime is functional and covered by tests:
 
+- closed-loop episodes with reset, re-observation, recent-action context and explicit termination reasons;
+- deterministic stuck detection from repeated state fingerprints and repeated actions;
+- dynamic observer and capability-pack registries rather than only hard-coded action lists;
 - strict TypeSafe Jev `choice` client with response validation, retries and credential redaction;
 - composite `ActionCandidate` objects across GUI, CLI, MCP, script/API and control channels;
 - fail-closed guard for stale decisions, replay, path boundaries, writes and confirmation;
 - unified action receipts, verifier registry and JSONL traces;
 - deterministic rule policy for a no-key baseline and ablation experiments;
+- content-addressed Jev record/replay and cache-only execution;
+- repeated experiment summaries with channel counts, failure statuses and Wilson 95% intervals;
 - a reproducible multi-channel routing demo.
 
 Initial capability adapters:
@@ -69,11 +74,19 @@ Run the no-key deterministic demo:
 
 ```powershell
 cua-jev demo --policy rule
+cua-jev episode-demo --policy rule
+cua-jev experiment --policy rule --episodes 10
+cua-jev tasks
 ```
 
 It creates a small report under `demo-workspace/`, offers three equivalent read-only routes—typed filesystem
 API, MCP and allowlisted PowerShell—selects one, executes it and writes the complete trace to
 `runs/demo.jsonl`.
+
+`episode-demo` is a real two-step closed loop. It resets a sandbox, offers filesystem API and MCP copy
+routes, executes one, observes the changed filesystem, emits `control.done`, and accepts completion only
+after an independent byte-for-byte verifier. `experiment` repeats this resettable episode without dropping
+failures from the denominator.
 
 To run the same candidates through real Jev:
 
@@ -173,5 +186,13 @@ v0.1 focuses on the action router and execution contract. Next milestones are:
 3. add a standard remote MCP transport behind the current typed tool boundary;
 4. run Jev-vs-rule-vs-LLM ablations over frozen tasks and publish traces;
 5. add an optional VLM fallback only for observations that DOM/UIA/COM cannot resolve.
+
+## Honest v0.1 boundary
+
+The closed-loop sandbox task is executable today. The Edge, Excel, Explorer and VS Code frozen task files
+bind reset rules, capability packs, success criteria and step budgets, while their live application suites
+remain the next implementation milestone. CUA-JEV v0.1 targets predefined tasks with structured DOM,
+UIA, COM, terminal and filesystem state. It does not understand arbitrary screenshots, generate arbitrary
+shell commands, or claim general Windows autonomy.
 
 Apache-2.0 licensed.

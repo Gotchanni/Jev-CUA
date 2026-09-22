@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import os
 import time
@@ -57,6 +59,7 @@ class JevPolicy:
         self._client = client or httpx.Client(timeout=timeout_s, follow_redirects=False)
         self._owns_client = client is None
         self._sleep = sleep
+        self.last_exchange: dict = {}
 
     def close(self) -> None:
         if self._owns_client:
@@ -87,10 +90,15 @@ class JevPolicy:
                 }
             },
         }
+        request_hash = hashlib.sha256(
+            json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
         started = time.perf_counter()
         result = None
         safe_error = "Jev request failed"
+        attempts = 0
         for attempt in range(self.retries + 1):
+            attempts += 1
             try:
                 response = self._client.post(
                     self.api_url,
@@ -109,8 +117,17 @@ class JevPolicy:
                     self._sleep(0.25 * (2**attempt))
                     continue
         if result is None:
+            self.last_exchange = {"request": body, "request_hash": request_hash, "attempts": attempts}
             raise PolicyError(safe_error)
         latency_ms = (time.perf_counter() - started) * 1000
+        self.last_exchange = {
+            "request": body,
+            "request_hash": request_hash,
+            "attempts": attempts,
+            "response": result,
+            "latency_ms": latency_ms,
+            "usage": result.get("usage", {}),
+        }
         try:
             answer = result["answers"]["action"]
             selected = answer["choice"]

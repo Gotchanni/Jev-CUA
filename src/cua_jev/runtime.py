@@ -39,6 +39,9 @@ class AgentRuntime:
         self.trace.append("candidates", {"items": [candidate.to_dict() for candidate in candidates]})
         decision = self.policy.choose(observation, candidates)
         self.trace.append("decision", decision.to_dict())
+        exchange = getattr(self.policy, "last_exchange", None)
+        if exchange:
+            self.trace.append("policy_exchange", exchange)
         candidate = self.guard.approve(observation, decision, candidates)
         receipt = self.executors.execute(candidate, observation.observation_id, decision.decision_id)
         self.trace.append("receipt", receipt.to_dict())

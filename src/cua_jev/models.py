@@ -135,5 +135,13 @@ class Verification:
 
 
 def state_fingerprint(observation: Observation) -> str:
-    raw = json.dumps(observation.to_dict(), sort_keys=True, separators=(",", ":")).encode()
+    # Volatile ids and timestamps must not hide an unchanged environment state.
+    state = {key: value for key, value in observation.state.items() if key != "recent_actions"}
+    stable = {
+        "task": observation.task,
+        "subgoal": observation.subgoal,
+        "source": observation.source,
+        "state": state,
+    }
+    raw = json.dumps(stable, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(raw).hexdigest()

@@ -40,3 +40,30 @@ def test_guard_blocks_write_by_default(tmp_path):
     obs = Observation("test", "write", {})
     with pytest.raises(GuardRejected, match="writes are disabled"):
         ActionGuard(allowed_roots=[tmp_path]).approve(obs, decision(obs, candidate), [candidate])
+
+
+def test_guard_requires_deterministic_precondition_evaluator(tmp_path):
+    candidate = ActionCandidate(
+        "read",
+        Channel.API,
+        "filesystem.read_text",
+        "read",
+        {"path": str(tmp_path / "a")},
+        preconditions=("file_exists",),
+    )
+    obs = Observation("test", "read", {})
+    with pytest.raises(GuardRejected, match="unchecked preconditions"):
+        ActionGuard(allowed_roots=[tmp_path]).approve(obs, decision(obs, candidate), [candidate])
+
+
+def test_guard_checks_nested_mcp_paths(tmp_path):
+    candidate = ActionCandidate(
+        "mcp",
+        Channel.MCP,
+        "mcp.call_tool",
+        "read",
+        {"arguments": {"path": str(tmp_path.parent / "outside.txt")}},
+    )
+    obs = Observation("test", "read", {})
+    with pytest.raises(GuardRejected, match="outside allowed roots"):
+        ActionGuard(allowed_roots=[tmp_path]).approve(obs, decision(obs, candidate), [candidate])
