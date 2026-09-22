@@ -1,7 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 const escapeHTML = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[char]);
 const formatMs = (value) => value == null ? "—" : value >= 1000 ? `${(value / 1000).toFixed(1)} s` : `${Math.round(value)} ms`;
-const agentLabel = { jev: "Jev", rule: "Rule baseline", codex_computer_use: "Codex Computer Use", jev_with_fallback: "Jev + fallback" };
+const agentLabel = { jev: "Jev", rule: "Rule baseline", codex_computer_use: "Codex agent", jev_with_fallback: "Jev + fallback" };
 let tasks = {};
 let demos = {};
 let selectedTask = "edge";
@@ -118,7 +118,8 @@ function benchmarkRow(row, maxDuration) {
   const mode = kind === "hybrid" ? "Hybrid" : "GUI Only";
   const label = `${agentLabel[row.agent] || row.agent} · ${mode}`;
   const actions = row.mean_actions == null ? "—" : row.mean_actions.toFixed(1);
-  return `<div class="result-row"><div class="result-name"><b>${escapeHTML(label)}</b></div><div class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></div><div class="result-meta">${row.successful_samples}/${row.samples} runs · ${actions} actions</div></div>`;
+  const sampleLabel = row.agent === "codex_computer_use" && row.samples === 1 ? "1 pilot run" : `${row.successful_samples}/${row.samples} runs`;
+  return `<div class="result-row"><div class="result-name"><b>${escapeHTML(label)}</b></div><div class="result-track"><i class="${kind}" style="--width:${width}%"></i><strong>${formatMs(duration)}</strong></div><div class="result-meta">${sampleLabel} · ${actions} actions</div></div>`;
 }
 
 function pairedRows(rows) {
@@ -169,7 +170,9 @@ async function renderBenchmark() {
       const speedup = values.gui_only.median_wall_time_ms / values.hybrid.median_wall_time_ms;
       const wording = speedup >= 1.02 ? "Hybrid speedup" : "GUI Only ÷ Hybrid";
       $("#speedup-callout").innerHTML = `<strong>${speedup.toFixed(1)}×</strong><span>${wording}</span>`;
-      $("#benchmark-foot").textContent = `${values.hybrid.samples + values.gui_only.samples} real runs · same terminal verifier · median successful wall time`;
+      const codexSamples = rows.filter((row) => row.agent === "codex_computer_use").reduce((sum, row) => sum + row.samples, 0);
+      const codexNote = codexSamples ? ` · ${codexSamples} Codex pilot ${codexSamples === 1 ? "run" : "runs"}` : "";
+      $("#benchmark-foot").textContent = `${values.hybrid.samples + values.gui_only.samples} Jev runs${codexNote} · same terminal verifier`;
     } else {
       $("#speedup-callout").innerHTML = `<strong>—</strong><span>paired speedup</span>`;
       $("#benchmark-foot").textContent = "Only measured runs are shown—no estimated values.";

@@ -19,7 +19,7 @@ The reusable output is not the four example workflows by themselves. The project
 - an action-space ablation (`Hybrid Action Space` versus `GUI Only`) that is independent of the decision
   policy;
 - complete JSONL decision evidence and a read-only benchmark showcase;
-- a benchmark contract for Jev, deterministic policies and external agents such as Codex Computer Use;
+- a benchmark contract for Jev, deterministic policies and external agents such as Codex;
 - four executable capability-pack examples showing how to add a new application and independent terminal
   verifier.
 
@@ -127,20 +127,49 @@ the next intent and the best available PyAutoGUI, DOM, COM, CLI, MCP or API rout
 recordable action-space ablation: every mutation is performed visibly through PyAutoGUI. Jev and the
 deterministic Rule baseline can run against either action space, so policy and action space are not conflated.
 
-Codex Computer Use is treated as an external non-Jev runner, not relabelled Rule behavior. After Codex runs
-the same task and passes the same terminal verifier, import its measured result through the local-only
-baseline contract. Missing values stay unavailable rather than being estimated:
+Codex is treated as an external non-Jev runner, not relabelled Rule behavior. A Codex Hybrid run may use
+browser automation, COM, CLI, filesystem tools and GUI actions; it should not be presented as GUI Only.
+After Codex runs the same task and passes the same terminal verifier, import its measured result through
+the local-only baseline contract. The first Codex measurements are pilot samples, not a statistically
+supported speed ranking: Jev uses prebuilt task capability packs, whereas Codex plans with general tools.
+The wall clock includes fixture setup, agent/tool time and terminal verification; explicit human approval
+waits are excluded and must be disclosed. Missing values stay unavailable rather than being estimated:
 
 ```powershell
 $bootstrap = Invoke-RestMethod http://127.0.0.1:8768/api/bootstrap
 $body = @{
-  agent = "codex_computer_use"; task = "edge"; action_space = "gui_only"
-  success = $true; duration_ms = 42000; actions = 8
-  channels = @{ gui = 8 }; verifier = "shared_terminal_verifier"
+  agent = "codex_computer_use"; task = "edge"; action_space = "hybrid"
+  success = $true; duration_ms = 42000; actions = 14
+  channels = @{ script = 14 }; verifier = "shared_terminal_verifier"
 } | ConvertTo-Json
 Invoke-RestMethod http://127.0.0.1:8768/api/baselines -Method Post `
   -Headers @{ "X-CUA-JEV-CSRF" = $bootstrap.csrf } -ContentType "application/json" -Body $body
 ```
+
+`scripts/codex_baseline_fixture.py` can prepare any v2 task in an isolated temporary workspace and invoke
+that task's existing terminal evaluator. It intentionally does not solve the task; Codex must perform the
+actions through its chosen tools. Its `verify` command checks the same final task predicate used by Jev.
+
+### Codex Hybrid pilot (2026-09-23)
+
+These are the first four **single-run** Codex Hybrid measurements against the frozen v2 tasks. The Jev
+column is the median of existing successful Hybrid runs, not a matched same-day trial. Every listed run
+passed the task's terminal evaluator.
+
+| Task | Jev Hybrid median | Jev runs | Codex Hybrid wall time | Codex runs |
+|---|---:|---:|---:|---:|
+| Edge | 79.5 s | 2/2 | 77.4 s | 1/1 |
+| Excel | 84.2 s | 3/3 | 39.2 s | 1/1 |
+| VS Code | 14.0 s | 2/2 | 57.9 s | 1/1 |
+| Explorer | 13.2 s | 4/4 | 50.9 s | 1/1 |
+
+Codex used a generic Playwright browser adapter for Edge, generic COM operations for Excel, and CLI/file
+tools for VS Code and Explorer. Its clock includes fixture setup, model/tool interaction and terminal
+verification. The 26.6 s spent waiting for human approval before the public demo checkout was excluded
+from Edge's 77.4 s. Codex had access to this repository's task specifications; Jev used its already-built
+capability packs. This pilot shows feasibility and exposes both wins and losses, **not** a general speed
+ranking or an isolated measurement of model response latency. In these stored Jev runs, Edge and Excel
+Hybrid selected GUI actions only; they do not demonstrate faster structured-route selection yet.
 
 Run the no-key deterministic demo:
 
